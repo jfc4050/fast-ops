@@ -5,7 +5,7 @@ from fast_ops.flash_attention.flash_attention import FlashAttentionFunction
 def test_flash_attn():
     batch_sz = 1
     n_heads = 1
-    seq_len = 16
+    seq_len = 8
     head_dim = 32
     dtype = torch.bfloat16
 
@@ -15,3 +15,4 @@ def test_flash_attn():
     out = FlashAttentionFunction.apply(Q, K, V)
 
     print(out)
+    print(out.shape)

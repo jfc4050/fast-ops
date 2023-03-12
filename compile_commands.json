@@ -1,0 +1,40 @@
+[
+    {
+        "arguments": [
+            "x86_64-linux-gnu-gcc",
+            "-c",
+            "-pthread",
+            "-Wno-unused-result",
+            "-Wsign-compare",
+            "-DNDEBUG",
+            "-g",
+            "-fwrapv",
+            "-O2",
+            "-Wall",
+            "-g",
+            "-fstack-protector-strong",
+            "-Wformat",
+            "-Werror=format-security",
+            "-g",
+            "-fwrapv",
+            "-O2",
+            "-g",
+            "-fstack-protector-strong",
+            "-Wformat",
+            "-Werror=format-security",
+            "-Wdate-time",
+            "-D_FORTIFY_SOURCE=2",
+            "-fPIC",
+            "-I/usr/local/lib/python3.8/dist-packages/torch/include",
+            "-I/usr/local/lib/python3.8/dist-packages/torch/include/torch/csrc/api/include",
+            "-I/usr/local/lib/python3.8/dist-packages/torch/include/TH",
+            "-I/usr/local/lib/python3.8/dist-packages/torch/include/THC",
+            "-I/usr/include/python3.8",
+            "-o",
+            "build/temp.linux-x86_64-3.8/fast_ops/flash_attention/flash_attention.o",
+            "fast_ops/flash_attention/flash_attention.cpp"
+        ],
+        "directory": "/workspace/fast-ops",
+        "file": "fast_ops/flash_attention/flash_attention.cpp"
+    }
+]
