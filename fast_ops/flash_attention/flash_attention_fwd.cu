@@ -1,6 +1,6 @@
-#include "ATen/ops/zeros_like.h"
-#include "c10/core/ScalarType.h"
+#include <ATen/ops/zeros_like.h>
 #include <ATen/core/TensorAccessor.h>
+#include <c10/core/ScalarType.h>
 #include <cute/tensor.hpp>
 #include <cutlass/cutlass.h>
 #include <torch/extension.h>
@@ -8,7 +8,8 @@
 #include "common/launch_utils.h"
 #include "cute/layout.hpp"
 #include "cute/pointer.hpp"
-#include "cute/swizzle_ptr.hpp"
+#include "cute/stride.hpp"
+
 
 template <typename scalar_t_pt, int BLOCK_M, int BLOCK_N, int BLOCK_D>
 __global__ void flash_attn_fwd_kernel(
@@ -36,15 +37,18 @@ __global__ void flash_attn_fwd_kernel(
 
   // represent full tensors
   auto Q = cute::make_tensor(
-      cute::make_gmem_ptr(
-          reinterpret_cast<scalar_t *>(Q_accessor[batch_idx][head_idx].data())),
-      cute::make_shape(Q_accessor.size(3), Q_accessor.size(4)));
+      cute::make_gmem_ptr(reinterpret_cast<scalar_t *>(Q_accessor[batch_idx][head_idx].data())),
+      cute::make_layout(
+        cute::make_shape(Q_accessor.size(3), Q_accessor.size(4)),
+        cute::GenRowMajor{}));
   // TODO. do K and V as well
 
   // represent SRAM tiles
   // TODO. double check stride
-  auto Qi = cute::make_tensor(cute::make_smem_ptr(Qi_smem),
-                              cute::make_shape(BLOCK_M, BLOCK_D), BLOCK_M);
+  auto Qi = cute::make_tensor(
+    cute::make_smem_ptr(Qi_smem),
+    cute::make_layout(
+        cute::make_shape(BLOCK_M, BLOCK_D)));
 
   for (int seq_chunk_n_start = 0; seq_chunk_n_start < seqlen_n;
        seq_chunk_n_start += BLOCK_N) {
