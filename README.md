@@ -1,7 +1,7 @@
 **fast-ops** is a (personal project) library containing efficient PyTorch operators.
 
 # Operators
-* [(Flash) Multihead Attention](fast_ops/flash_attention/README.md)
+* [(Flash) Multi-Head Attention](fast_ops/flash_attention/README.md)
 
 # Development
 

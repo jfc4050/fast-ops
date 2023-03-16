@@ -10,12 +10,23 @@ We prioritize A100 (SM80) GPUs. This doesn't necessarily mean that other GPUs
 aren't supported, but to be safe it's recommended to run the unit tests on your own machine
 if you are using different hardware.
 
-## Usage Tips
-* If you are doing causal masking, use the `causal` flag rather than applying it via `attn_bias`.
+## Usage
+See unit tests for more usage examples.
+```python
+dtype = torch.bfloat16
+device = "cuda"
+Q = torch.rand(1, 12, 4096, 128, dtype=dtype, device=device)
+K = torch.rand(1, 12, 4096, 128, dtype=dtype, device=device)
+V = torch.rand(1, 12, 4096, 128, dtype=dtype, device=device)
+
+O = FlashAttentionFunction.apply(Q, K, V)
+```
+### Tips
+* If you are doing causal masking, use the `causal` flag rather than applying it via the attention bias.
 The kernel can use this as a signal to skip blocks it knows will be masked out anyways and performance will improve by ~2x.
 
 ## Limitations
-Violating these constraints will result in an exception.
+Violating any of these constraints will result in an exception.
 * `head_dim` must be <= 128. Otherwise tiles become too large to keep in SRAM. If you'd like to use larger values of `head_dim`,
 consider using the [xFormers](https://github.com/facebookresearch/xformers) implementation.
 * `head_dim` must be a multiple of 8 - this is an alignment requirement to support 128b, half-precision, vectorized loads.
