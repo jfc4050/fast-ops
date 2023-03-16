@@ -1,0 +1,2 @@
+CompileFlags:
+  Remove: [--expt-relaxed-constexpr, --compiler-options, --threads, -gencode=arch=*]
