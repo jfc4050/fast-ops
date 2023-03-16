@@ -13,7 +13,7 @@ flash_attention_ext = load(
     ],
     extra_include_paths=["third-party/cutlass/include"],
     extra_cflags=["-std=c++17"],
-    extra_cuda_cflags=["--threads", "0"],
+    extra_cuda_cflags=["--threads", "0", "-std=c++17"],
     with_cuda=True,
     verbose=True,
 )
