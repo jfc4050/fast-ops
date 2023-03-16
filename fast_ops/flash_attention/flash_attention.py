@@ -12,6 +12,7 @@ flash_attention_ext = load(
         "fast_ops/flash_attention/flash_attention_fwd.cu",
     ],
     extra_include_paths=["third-party/cutlass/include"],
+    extra_cflags=["-std=c++17"],
     extra_cuda_cflags=["--threads", "0"],
     with_cuda=True,
     verbose=True,

@@ -5,7 +5,7 @@
 #include <cutlass/cutlass.h>
 #include <torch/extension.h>
 
-#include "common/dispatch.h"
+#include "common/launch_utils.h"
 #include "cute/layout.hpp"
 #include "cute/pointer.hpp"
 #include "cute/swizzle_ptr.hpp"
@@ -21,9 +21,10 @@ __global__ void flash_attn_fwd_kernel(
     at::PackedTensorAccessor32<scalar_t_pt, 4, at::RestrictPtrTraits>
         O_accessor) {
 
-  // TODO. map PyTorch type to cutlass type;
+  // map PyTorch type to CUTLASS type
+  using scalar_t = typename cutlass_t<scalar_t_pt>::value;
 
-  __shared__ scalar_t_pt Qi_smem[BLOCK_M * BLOCK_D];
+  __shared__ scalar_t Qi_smem[BLOCK_M * BLOCK_D];
 
   const int seqlen_m = Q_accessor.size(3); // number of queries
   const int seqlen_n = K_accessor.size(3); // number of keys/values
@@ -35,7 +36,8 @@ __global__ void flash_attn_fwd_kernel(
 
   // represent full tensors
   auto Q = cute::make_tensor(
-      cute::make_gmem_ptr(Q_accessor[batch_idx][head_idx].data()),
+      cute::make_gmem_ptr(
+          reinterpret_cast<scalar_t *>(Q_accessor[batch_idx][head_idx].data())),
       cute::make_shape(Q_accessor.size(3), Q_accessor.size(4)));
   // TODO. do K and V as well
 
