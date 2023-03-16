@@ -1,9 +1,6 @@
 #include <torch/extension.h>
 
-
-at::Tensor flash_attn_fwd_cuda(
-  at::Tensor Q, at::Tensor K, at::Tensor V);
-
+at::Tensor flash_attn_fwd_cuda(at::Tensor Q, at::Tensor K, at::Tensor V);
 
 at::Tensor flash_attn_fwd(at::Tensor Q, at::Tensor K, at::Tensor V) {
   const int head_dim = Q.size(-1);
