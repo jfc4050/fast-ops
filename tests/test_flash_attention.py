@@ -2,6 +2,7 @@ import torch
 
 from fast_ops.flash_attention.flash_attention import FlashAttentionFunction
 
+
 def test_flash_attn():
     batch_sz = 1
     n_heads = 1

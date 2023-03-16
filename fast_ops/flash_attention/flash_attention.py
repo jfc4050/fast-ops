@@ -5,10 +5,9 @@ from torch.autograd import Function
 from torch.utils.cpp_extension import load
 
 flash_attention_ext = load(
-    name="flash_attention",
-    sources=["fast_ops/flash_attention/flash_attention.cpp"],
-    verbose=True
+    name="flash_attention", sources=["fast_ops/flash_attention/flash_attention.cpp"], verbose=True
 )
+
 
 class FlashAttentionFunction(Function):
     @staticmethod
