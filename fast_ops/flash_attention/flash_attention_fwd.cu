@@ -29,9 +29,9 @@ __global__ void flash_attn_fwd_kernel(
   const int seqlen_m = Q_accessor.size(3); // number of queries
   const int seqlen_n = K_accessor.size(3); // number of keys/values
 
-  const int batch_idx = threadIdx.x;
-  const int head_idx = threadIdx.y;
-  const int seq_chunk_m_idx = threadIdx.z;
+  const int batch_idx = blockIdx.x;
+  const int head_idx = blockIdx.y;
+  const int seq_chunk_m_idx = blockIdx.z;
   const int start_m = seq_chunk_m_idx * BLOCK_M;
 
   // represent full tensors
