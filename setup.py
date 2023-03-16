@@ -11,9 +11,7 @@ setup(
                 "fast_ops/flash_attention/flash_attention_fwd.cu",
             ],
             include_dirs=["third-party/cutlass/include"],
-            extra_compile_args={
-                "nvcc": ["--threads", "0"]
-            },
+            extra_compile_args={"nvcc": ["--threads", "0"]},
             cmdclass={"build_ext": BuildExtension},
         ),
     ],
