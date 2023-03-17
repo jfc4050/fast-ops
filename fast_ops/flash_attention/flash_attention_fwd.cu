@@ -14,6 +14,7 @@
 template <typename scalar_t, int BLOCK_M, int BLOCK_N, int BLOCK_D>
 struct flash_attn_fwd_smem {
   scalar_t Qi[BLOCK_M * BLOCK_D];
+  scalar_t Sij[BLOCK_M * BLOCK_N];
 
   union {
     scalar_t Kj[BLOCK_N * BLOCK_D];
@@ -94,6 +95,13 @@ __global__ void flash_attn_fwd_kernel(
     auto Kj_load_partition_smem =
         cute::local_partition(Kj, Kj_load_thread_layout, thread_id);
     cute::copy(Kj_load_partition_gmem, Kj_load_partition_smem);
+
+    // initialize accumulator tile for Sij (registers)
+    auto Sij = cute::make_tensor(
+        cute::make_smem_ptr(smem.Sij),
+        cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_N)));
+    auto Sij_frag = cute::make_fragment_like(
+        cute::make_layout(cute::make_shape(cute::Int<16>{}, cute::Int<16>{})));
   }
 }
 
