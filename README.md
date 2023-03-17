@@ -17,4 +17,6 @@ If you need to update this file you can run:
 Run `scripts/fmt` to reformat all project files.
 
 # Resources
+* [\[NVIDIA Doc\] CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
+* [\[NVIDIA Doc\] Parallel Thread Execution ISA Version 8.1](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html)
 * [\[PyTorch Tutorial\] Custom C++ and CUDA Extensions](https://pytorch.org/tutorials/advanced/cpp_extension.html)
