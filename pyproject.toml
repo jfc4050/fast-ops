@@ -1,3 +1,21 @@
+[tool.poetry]
+name = "fast-ops"
+version = "0.1.0"
+description = "library for efficient PyTorch operators"
+authors = ["Justin Chiu <jfc4050@gmail.com>"]
+readme = "README.md"
+packages = [{include = "fast_ops"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.pytest.ini_options]
 testpaths = [
     "tests",
