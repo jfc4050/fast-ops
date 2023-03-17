@@ -124,12 +124,18 @@ __global__ void flash_attn_fwd_kernel(
 
     // do mi_new = max(mi, mij)
 
-    // do li_new = exp(mi - mi_new) * li + exp(mij - mi_new)
+    // do li_new = exp(mi - mi_new) * li + exp(mij - mi_new) * lij
+
+    // TODO. write to Oi
 
     // do li <- li_new
 
     // do mi <- mi_new
   }
+
+  // TODO. final scaling on Oi
+
+  // write Oi to DRAM
 }
 
 at::Tensor flash_attn_fwd_cuda(at::Tensor Q, at::Tensor K, at::Tensor V) {
