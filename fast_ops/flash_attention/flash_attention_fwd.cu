@@ -2,7 +2,7 @@
 #include <ATen/ops/zeros_like.h>
 #include <c10/core/ScalarType.h>
 #include <cute/tensor.hpp>
-#include <cutlass/cutlass.h>
+#include <cutlass/cutlass.h
 #include <torch/extension.h>
 
 #include "common/launch_utils.h"
