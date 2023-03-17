@@ -3,12 +3,17 @@ from typing import Tuple
 
 from torch import Tensor
 from torch.autograd import Function
-from torch.utils.cpp_extension import load
+import torch.utils.cpp_extension as cpp_extension
+# from torch.utils.cpp_extension import load
 
-os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
+os.environ["TORCH_CUDA_ARCH_LIST"] = "7.5"
+# monkey patching this for now so I can add in my own arch flags.
+# for some reason even when building with TORCH_CUDA_ARCH_LIST=8.0
+# it builds for an older architecture and thinks it only has 49152B (0xc000)
+# of shared memory.
+cpp_extension._get_cuda_arch_flags = lambda: []
 
-# see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/
-flash_attention_ext = load(
+flash_attention_ext = cpp_extension.load(
     name="flash_attention",
     sources=[
         "fast_ops/flash_attention/flash_attention.cpp",
@@ -16,7 +21,8 @@ flash_attention_ext = load(
     ],
     extra_include_paths=["third-party/cutlass/include"],
     extra_cflags=["-std=c++17"],
-    extra_cuda_cflags=["--threads", "0", "-std=c++17"],
+    # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/
+    extra_cuda_cflags=["--threads", "0", "-std=c++17", "--gpu-architecture=compute_80"],
     with_cuda=True,
     verbose=True,
 )

@@ -27,12 +27,12 @@
             "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
             "--expt-relaxed-constexpr",
-            "-gencode=arch=compute_80,code=sm_80",
             "--compiler-options",
             "-fPIC",
             "--threads",
             "0",
             "-std=c++17",
+            "--gpu-architecture=compute_80",
             "-o",
             "flash_attention_fwd.cuda.o",
             "../../../../../workspace/fast-ops/fast_ops/flash_attention/flash_attention_fwd.cu"
