@@ -40,7 +40,8 @@ __global__ void flash_attn_fwd_kernel(
   //
   // this means that for each threadblock:
   // - Qi is only loaded from DRAM once
-  // - Oi, li and mi are only written to DRAM once
+  // - Oi is only written to DRAM once
+  // - li and mi are never written to DRAM
   // - Kj and Vj have to be loaded from DRAM multiple times
 
   // map PyTorch type to CUTLASS type
@@ -114,6 +115,20 @@ __global__ void flash_attn_fwd_kernel(
         cute::make_layout(cute::make_shape(cute::Int<16>{}, cute::Int<16>{})));
 
     // do Sij = tau * Qi @ Kj.T
+
+    // do mij = rowmax(Sij)
+
+    // do Pij = exp(Sij - mij)
+
+    // do lij = rowsum(Pij)
+
+    // do mi_new = max(mi, mij)
+
+    // do li_new = exp(mi - mi_new) * li + exp(mij - mi_new)
+
+    // do li <- li_new
+
+    // do mi <- mi_new
   }
 }
 
