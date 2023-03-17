@@ -116,6 +116,8 @@ __global__ void flash_attn_fwd_kernel(
 
     // do Sij = tau * Qi @ Kj.T
 
+    // TODO. do Sij = Sij + Bij
+
     // do mij = rowmax(Sij)
 
     // do Pij = exp(Sij - mij)
@@ -125,6 +127,8 @@ __global__ void flash_attn_fwd_kernel(
     // do mi_new = max(mi, mij)
 
     // do li_new = exp(mi - mi_new) * li + exp(mij - mi_new) * lij
+
+    // TODO. do Pij = dropout(Pij, p_drop)
 
     // TODO. write to Oi
 
