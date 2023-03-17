@@ -5,6 +5,14 @@
 
 # Development
 
+## Dependencies
+This project's Python dependencies are managed with [Poetry](https://python-poetry.org/docs/).
+
+You can install dependencies (or subsets for development and testing) using:
+```bash
+> poetry install
+```
+
 ## Language Server Support
 We use [Bear](https://github.com/rizsotto/Bear) to generate the
 [compile_commands.json](compile_commands.json) file that is used for language servers.
