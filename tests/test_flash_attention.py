@@ -2,6 +2,8 @@ import torch
 
 from fast_ops.flash_attention.flash_attention import FlashAttentionFunction
 
+torch.set_printoptions(linewidth=200)
+
 
 def test_flash_attn():
     batch_sz = 1
