@@ -4,7 +4,6 @@ from typing import Tuple
 from torch import Tensor
 from torch.autograd import Function
 import torch.utils.cpp_extension as cpp_extension
-# from torch.utils.cpp_extension import load
 
 os.environ["TORCH_CUDA_ARCH_LIST"] = "7.5"
 # monkey patching this for now so I can add in my own arch flags.

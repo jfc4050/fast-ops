@@ -8,8 +8,8 @@
 #include "cute/layout.hpp"
 #include "cute/pointer.hpp"
 #include "cute/stride.hpp"
-#include "cute/tensor.hpp"
 #include "cute/swizzle_layout.hpp"
+#include "cute/tensor.hpp"
 
 template <typename scalar_t, int BLOCK_M, int BLOCK_N, int BLOCK_D>
 struct flash_attn_fwd_smem {
