@@ -4,6 +4,7 @@
 #include <torch/extension.h>
 
 #include "common/launch_utils.h"
+#include "cute/algorithm/clear.hpp"
 #include "cute/config.hpp"
 #include "cute/layout.hpp"
 #include "cute/pointer.hpp"
@@ -80,9 +81,11 @@ __global__ void flash_attn_fwd_kernel(
   // load Qi into SRAM - this is loop invariant and is only loaded once.
   auto Qi = cute::make_tensor(
       cute::make_smem_ptr(smem.Qi),
-      cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_D)));
+      cute::make_layout(
+          cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{})));
   auto Qi_gmem_tile = cute::local_tile(
-      Q, cute::make_shape(BLOCK_M, BLOCK_D), cute::make_coord(start_m, 0));
+      Q, cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{}),
+      cute::make_coord(start_m, cute::Int<0>{}));
   auto Qi_load_thread_layout =
       cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
   auto Qi_load_partition_gmem =
@@ -96,9 +99,10 @@ __global__ void flash_attn_fwd_kernel(
     // load Kj into SRAM
     auto Kj = cute::make_tensor(
         cute::make_smem_ptr(smem.Kj),
-        cute::make_layout(cute::make_shape(BLOCK_N, BLOCK_D)));
+        cute::make_layout(
+            cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{})));
     auto Kj_gmem_tile = cute::local_tile(
-        Kj, cute::make_shape(BLOCK_N, BLOCK_D),
+        Kj, cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{}),
         cute::make_coord(seq_block_n0, 0));
     auto Kj_load_thread_layout =
         cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
@@ -109,13 +113,12 @@ __global__ void flash_attn_fwd_kernel(
     cute::copy(Kj_load_partition_gmem, Kj_load_partition_smem);
 
     // initialize accumulator tile for Sij (registers)
-    auto Sij = cute::make_tensor(
-        cute::make_smem_ptr(smem.Sij),
-        cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_N)));
-    auto Sij_frag = cute::make_fragment_like(
+    auto Sij_frag = cute::make_tensor<scalar_t>(
         cute::make_layout(cute::make_shape(cute::Int<16>{}, cute::Int<16>{})));
+    cute::clear(Sij_frag);
 
     // do Sij = tau * Qi @ Kj.T
+    // cute::gemm(Qi_load_partition_smem, Kj_load_partition_smem, Sij_frag);
 
     // TODO. do Sij = Sij + Bij
 
