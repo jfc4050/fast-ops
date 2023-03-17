@@ -1,15 +1,16 @@
-#include <ATen/ops/zeros_like.h>
 #include <ATen/core/TensorAccessor.h>
+#include <ATen/ops/zeros_like.h>
 #include <c10/core/ScalarType.h>
 #include <cute/tensor.hpp>
 #include <cutlass/cutlass.h>
 #include <torch/extension.h>
 
 #include "common/launch_utils.h"
+#include "cute/config.hpp"
 #include "cute/layout.hpp"
 #include "cute/pointer.hpp"
 #include "cute/stride.hpp"
-
+#include "cute/swizzle_layout.hpp"
 
 template <typename scalar_t_pt, int BLOCK_M, int BLOCK_N, int BLOCK_D>
 __global__ void flash_attn_fwd_kernel(
@@ -35,20 +36,33 @@ __global__ void flash_attn_fwd_kernel(
   const int seq_chunk_m_idx = blockIdx.z;
   const int start_m = seq_chunk_m_idx * BLOCK_M;
 
+  const int warp_id = threadIdx.x;
+  const int lane_id = threadIdx.y;
+  const int thread_id = warp_id * blockDim.x + lane_id;
+
   // represent full tensors
-  auto Q = cute::make_tensor(
-      cute::make_gmem_ptr(reinterpret_cast<scalar_t *>(Q_accessor[batch_idx][head_idx].data())),
-      cute::make_layout(
-        cute::make_shape(Q_accessor.size(3), Q_accessor.size(4)),
-        cute::GenRowMajor{}));
+  auto Q =
+      cute::make_tensor(cute::make_gmem_ptr(reinterpret_cast<scalar_t *>(
+                            Q_accessor[batch_idx][head_idx].data())),
+                        cute::make_layout(cute::make_shape(Q_accessor.size(3),
+                                                           Q_accessor.size(4)),
+                                          cute::GenRowMajor{}));
   // TODO. do K and V as well
 
   // represent SRAM tiles
-  // TODO. double check stride
-  auto Qi = cute::make_tensor(
-    cute::make_smem_ptr(Qi_smem),
-    cute::make_layout(
-        cute::make_shape(BLOCK_M, BLOCK_D)));
+  auto Qi =
+      cute::make_tensor(cute::make_smem_ptr(Qi_smem),
+                        cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_D)));
+  // make tile to be copied into SRAM
+  auto Qi_gmem_tile = cute::local_tile(Q, cute::make_shape(BLOCK_M, BLOCK_D),
+                                       cute::make_coord(start_m, 0));
+  auto Qi_load_thread_layout =
+      cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
+  auto Qi_load_partition_gmem =
+      cute::local_partition(Qi_gmem_tile, Qi_load_thread_layout, thread_id);
+  auto Qi_load_partition_smem =
+      cute::local_partition(Qi, Qi_load_thread_layout, thread_id);
+  cute::copy(Qi_load_partition_gmem, Qi_load_partition_smem);
 
   for (int seq_chunk_n_start = 0; seq_chunk_n_start < seqlen_n;
        seq_chunk_n_start += BLOCK_N) {
