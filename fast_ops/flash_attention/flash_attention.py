@@ -1,10 +1,13 @@
+import os
 from typing import Tuple
 
 from torch import Tensor
 from torch.autograd import Function
 from torch.utils.cpp_extension import load
 
+os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
 
+# see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/
 flash_attention_ext = load(
     name="flash_attention",
     sources=[
