@@ -10,6 +10,7 @@
 #include "cute/stride.hpp"
 #include "cute/swizzle_layout.hpp"
 #include "cute/tensor.hpp"
+#include "cutlass/fast_math.h"
 
 template <typename scalar_t, int BLOCK_M, int BLOCK_N, int BLOCK_D>
 struct flash_attn_fwd_smem {
@@ -155,7 +156,7 @@ at::Tensor flash_attn_fwd_cuda(at::Tensor Q, at::Tensor K, at::Tensor V) {
   constexpr int BLOCK_M = 128;
   constexpr int BLOCK_N = 128;
   constexpr int BLOCK_D = 128; // TODO. dispatch based on runtime headdim
-  const int n_blocks_m = (seqlen_m + BLOCK_M - 1) / BLOCK_M;
+  const int n_blocks_m = cutlass::ceil_div(seqlen_m, BLOCK_M);
 
   AT_DISPATCH_HALF_TYPES(
       Q.scalar_type(), "flash_attn_fwd", ([&] {
