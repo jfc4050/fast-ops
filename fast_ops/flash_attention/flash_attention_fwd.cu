@@ -32,6 +32,16 @@ __global__ void flash_attn_fwd_kernel(
         V_accessor,
     at::PackedTensorAccessor32<scalar_t_pt, 4, at::RestrictPtrTraits>
         O_accessor) {
+  // note the parallelization strategy and loop structure is different than
+  // described in the flash attention paper.
+  // the outer loop is over q sequence (parallelized over threadblocks/SMs)
+  // and inner loop is over kv sequence, where the algorithm
+  // described in the paper does the opposite.
+  //
+  // this means that for each threadblock:
+  // - Qi is only loaded from DRAM once
+  // - Oi, li and mi are only written to DRAM once
+  // - Kj and Vj have to be loaded from DRAM multiple times
 
   // map PyTorch type to CUTLASS type
   using scalar_t = typename cutlass_t<scalar_t_pt>::value;
