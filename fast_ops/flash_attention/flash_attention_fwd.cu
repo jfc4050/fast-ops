@@ -89,15 +89,15 @@ __global__ void flash_attn_fwd_kernel(
       cute::local_partition(Qi, Qi_load_thread_layout, thread_id);
   cute::copy(Qi_load_partition_gmem, Qi_load_partition_smem);
 
-  for (int seq_chunk_n_start = 0; seq_chunk_n_start < seqlen_n;
-       seq_chunk_n_start += BLOCK_N) {
+  for (int seq_block_n0 = 0; seq_block_n0 < seqlen_n; seq_block_n0 += BLOCK_N) {
 
     // load Kj into SRAM
     auto Kj = cute::make_tensor(
         cute::make_smem_ptr(smem.Kj),
         cute::make_layout(cute::make_shape(BLOCK_N, BLOCK_D)));
     auto Kj_gmem_tile = cute::local_tile(
-        Kj, cute::make_shape(BLOCK_N, BLOCK_D), cute::make_coord(start_m, 0));
+        Kj, cute::make_shape(BLOCK_N, BLOCK_D),
+        cute::make_coord(seq_block_n0, 0));
     auto Kj_load_thread_layout =
         cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
     auto Kj_load_partition_gmem =
@@ -112,6 +112,8 @@ __global__ void flash_attn_fwd_kernel(
         cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_N)));
     auto Sij_frag = cute::make_fragment_like(
         cute::make_layout(cute::make_shape(cute::Int<16>{}, cute::Int<16>{})));
+
+    // do Sij = tau * Qi @ Kj.T
   }
 }
 
