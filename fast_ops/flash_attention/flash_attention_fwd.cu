@@ -51,26 +51,26 @@ __global__ void flash_attn_fwd_kernel(
   const int thread_id = warp_id * blockDim.x + lane_id;
 
   // represent full tensors
-  auto Q =
-      cute::make_tensor(cute::make_gmem_ptr(reinterpret_cast<scalar_t *>(
-                            Q_accessor[batch_idx][head_idx].data())),
-                        cute::make_layout(cute::make_shape(Q_accessor.size(3),
-                                                           Q_accessor.size(4)),
-                                          cute::GenRowMajor{}));
-  auto K =
-      cute::make_tensor(cute::make_gmem_ptr(reinterpret_cast<scalar_t *>(
-                            K_accessor[batch_idx][head_idx].data())),
-                        cute::make_layout(cute::make_shape(K_accessor.size(3),
-                                                           K_accessor.size(4)),
-                                          cute::GenRowMajor{}));
+  auto Q = cute::make_tensor(
+      cute::make_gmem_ptr(
+          reinterpret_cast<scalar_t *>(Q_accessor[batch_idx][head_idx].data())),
+      cute::make_layout(
+          cute::make_shape(Q_accessor.size(3), Q_accessor.size(4)),
+          cute::GenRowMajor{}));
+  auto K = cute::make_tensor(
+      cute::make_gmem_ptr(
+          reinterpret_cast<scalar_t *>(K_accessor[batch_idx][head_idx].data())),
+      cute::make_layout(
+          cute::make_shape(K_accessor.size(3), K_accessor.size(4)),
+          cute::GenRowMajor{}));
   // TODO. do V as well
 
   // load Qi into SRAM - this is loop invariant and is only loaded once.
-  auto Qi =
-      cute::make_tensor(cute::make_smem_ptr(smem.Qi),
-                        cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_D)));
-  auto Qi_gmem_tile = cute::local_tile(Q, cute::make_shape(BLOCK_M, BLOCK_D),
-                                       cute::make_coord(start_m, 0));
+  auto Qi = cute::make_tensor(
+      cute::make_smem_ptr(smem.Qi),
+      cute::make_layout(cute::make_shape(BLOCK_M, BLOCK_D)));
+  auto Qi_gmem_tile = cute::local_tile(
+      Q, cute::make_shape(BLOCK_M, BLOCK_D), cute::make_coord(start_m, 0));
   auto Qi_load_thread_layout =
       cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
   auto Qi_load_partition_gmem =
@@ -86,8 +86,8 @@ __global__ void flash_attn_fwd_kernel(
     auto Kj = cute::make_tensor(
         cute::make_smem_ptr(smem.Kj),
         cute::make_layout(cute::make_shape(BLOCK_N, BLOCK_D)));
-    auto Kj_gmem_tile = cute::local_tile(Kj, cute::make_shape(BLOCK_N, BLOCK_D),
-                                         cute::make_coord(start_m, 0));
+    auto Kj_gmem_tile = cute::local_tile(
+        Kj, cute::make_shape(BLOCK_N, BLOCK_D), cute::make_coord(start_m, 0));
     auto Kj_load_thread_layout =
         cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
     auto Kj_load_partition_gmem =

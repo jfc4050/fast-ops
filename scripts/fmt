@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
 
-find fast_ops -name '*.cpp' -o -name '*.h' -o -name '*.cu' -o -name '*.cuh' | xargs clang-format -i
+bold=$(tput bold)
+normal=$(tput sgr0)
+
+echo ""
+echo "${bold}running clang-format...${normal}"
+find fast_ops -name '*.cpp' -o -name '*.h' -o -name '*.cu' -o -name '*.cuh' | xargs clang-format -i --verbose
+
+echo ""
+echo "${bold}running black...${normal}"
 black .
