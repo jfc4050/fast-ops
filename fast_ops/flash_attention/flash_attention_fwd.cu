@@ -84,7 +84,8 @@ __global__ void flash_attn_fwd_kernel(
       cute::make_layout(
           cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{})));
   auto Qi_gmem_tile = cute::local_tile(
-      Q, cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{}),
+      Q,
+      cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{}),
       cute::make_coord(start_m, cute::Int<0>{}));
   auto Qi_load_thread_layout =
       cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
@@ -102,7 +103,8 @@ __global__ void flash_attn_fwd_kernel(
         cute::make_layout(
             cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{})));
     auto Kj_gmem_tile = cute::local_tile(
-        Kj, cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{}),
+        Kj,
+        cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{}),
         cute::make_coord(seq_block_n0, 0));
     auto Kj_load_thread_layout =
         cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
