@@ -56,8 +56,8 @@ __global__ void flash_attn_fwd_kernel(
 
   const int batch_idx = blockIdx.x;
   const int head_idx = blockIdx.y;
-  const int seq_chunk_m_idx = blockIdx.z;
-  const int start_m = seq_chunk_m_idx * BLOCK_M;
+  const int seq_block_m_idx = blockIdx.z;
+  const int start_m = seq_block_m_idx * BLOCK_M;
 
   const int warp_id = threadIdx.x;
   const int lane_id = threadIdx.y;
@@ -86,7 +86,7 @@ __global__ void flash_attn_fwd_kernel(
   auto Qi_gmem_tile = cute::local_tile(
       Q,
       cute::make_shape(cute::Int<BLOCK_M>{}, cute::Int<BLOCK_D>{}),
-      cute::make_coord(start_m, cute::Int<0>{}));
+      cute::make_coord(seq_block_m_idx, cute::Int<0>{}));
   auto Qi_load_thread_layout =
       cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
   auto Qi_load_partition_gmem =
@@ -95,7 +95,9 @@ __global__ void flash_attn_fwd_kernel(
       cute::local_partition(Qi, Qi_load_thread_layout, thread_id);
   cute::copy(Qi_load_partition_gmem, Qi_load_partition_smem);
 
-  for (int seq_block_n0 = 0; seq_block_n0 < seqlen_n; seq_block_n0 += BLOCK_N) {
+  const int n_blocks_n = cutlass::ceil_div(seqlen_n, BLOCK_N);
+  for (int seq_block_n_idx = 0; seq_block_n_idx < n_blocks_n; ++seq_block_n_idx) {
+    const int seq_block_n0 = seq_block_n_idx * BLOCK_N;
 
     // load Kj into SRAM
     auto Kj = cute::make_tensor(
@@ -105,7 +107,7 @@ __global__ void flash_attn_fwd_kernel(
     auto Kj_gmem_tile = cute::local_tile(
         Kj,
         cute::make_shape(cute::Int<BLOCK_N>{}, cute::Int<BLOCK_D>{}),
-        cute::make_coord(seq_block_n0, 0));
+        cute::make_coord(seq_block_n_idx, cute::Int<0>{}));
     auto Kj_load_thread_layout =
         cute::make_shape(cute::Int<32>{}, cute::Int<8>{});
     auto Kj_load_partition_gmem =
@@ -120,7 +122,7 @@ __global__ void flash_attn_fwd_kernel(
     cute::clear(Sij_frag);
 
     // do Sij = tau * Qi @ Kj.T
-    // cute::gemm(Qi_load_partition_smem, Kj_load_partition_smem, Sij_frag);
+    cute::gemm(Qi_load_partition_smem, Kj_load_partition_smem, Sij_frag);
 
     // TODO. do Sij = Sij + Bij
 
