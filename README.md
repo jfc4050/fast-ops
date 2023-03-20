@@ -1,8 +1,8 @@
 **fast-ops** is a (personal project) library containing efficient PyTorch operators.
 
 # Operators
-* [(Flash) Multi-Head Attention](fast_ops/flash_attention/README.md).
-Algorithm from: [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/pdf/2205.14135.pdf).
+* **[(Flash) Multi-Head Attention](fast_ops/flash_attention/README.md):**
+Algorithm from [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/pdf/2205.14135.pdf).
 Significantly faster than vanilla attention due to fused implementation, and also
 has $O(n)$ rather than $O(n^2)$ memory complexity.
 
