@@ -1,5 +1,14 @@
 **fast-ops** is a (personal project) library containing efficient PyTorch operators.
 
+Generally, we focus on operators that aren't already implemented in other high-performance
+operator libraries, unless we feel we can beat them on performance, features, or usability.
+Some other places you can go "shopping" for operators are:
+* [NVIDIA Apex](https://github.com/NVIDIA/apex)
+* [Facebook xFormers](https://github.com/facebookresearch/xformers)
+* [ByteDance LightSeq](https://github.com/bytedance/lightseq/tree/master)
+* [FlashAttention](https://github.com/HazyResearch/flash-attention) - There's lots of other
+optimized operators in there other than FlashAttention.
+
 # Operators
 * **[(Flash) Multi-Head Attention](fast_ops/flash_attention/):**
 Algorithm from [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/pdf/2205.14135.pdf).
@@ -20,6 +29,17 @@ You can install dependencies (or subsets for development and testing) using:
 ```bash
 > poetry install
 ```
+
+## Testing
+Some test files support using [pytest-xdist](https://github.com/pytest-dev/pytest-xdist)
+to parallelize tests across GPUs. After installing it
+(you would have gotten it from `poetry install`), you can run your tests like:
+```bash
+pytest -n 8
+```
+to utilize 8 devices. Sometimes you can get away with more workers than devices
+but other times you'll get OOMs.
+
 
 ## Language Server Support
 We use [Bear](https://github.com/rizsotto/Bear) to generate the
