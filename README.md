@@ -7,7 +7,9 @@ Significantly faster than vanilla attention due to fused implementation, and als
 has $O(n)$ rather than $O(n^2)$ memory complexity.
 * **[(Fused) Lion Optimizer](fast_ops/lion/README.md):**
 Optimizer described in [Symbolic Discovery of Optimization Algorithms](https://arxiv.org/pdf/2302.06675.pdf).
-Claims some improved convergence properties and optimizer states only consists of half precision momentum.
+Claims some improved convergence properties and optimizer states only consists of half precision momentum,
+meaning pretty large memory savings over commonly used optimizers like
+[AdamW](https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html).
 
 # Development
 
