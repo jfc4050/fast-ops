@@ -52,7 +52,7 @@ __global__ void lion_update_kernel(
 
     // apply weight decay
     PRAGMA_UNROLL
-    for (int ii = 0; ii < ACCESS_N; ++i) {
+    for (int ii = 0; ii < ACCESS_N; ++ii) {
       param_vector.val[ii] *= weight_decay_factor;
     }
 
@@ -69,8 +69,8 @@ __global__ void lion_update_kernel(
           beta1_complement * grad_vector.val[ii] + update_vector.val[ii];
     }
     PRAGMA_UNROLL
-    for (int i = 0; i < ACCESS_N; ++i) {
-      update_vector.val[i] = sign(update_vector.val[i]);
+    for (int ii = 0; ii < ACCESS_N; ++ii) {
+      update_vector.val[ii] = sign(update_vector.val[ii]);
     }
 
     // apply update
