@@ -1,5 +1,6 @@
 #include <ATen/Dispatch.h>
 #include <ATen/native/cuda/MemoryAccess.cuh>
+#include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAStream.h>
 #include <stdexcept>
 #include <torch/extension.h>
@@ -130,14 +131,17 @@ void lion_update(
 
   AT_DISPATCH_HALF_TYPES(param.scalar_type(), "lion_update", [&]() {
     const int numel = param.numel();
-    constexpr int BLOCK = 256;
-    const dim3 blockdim(BLOCK);
-    const dim3 griddim((numel + BLOCK - 1) / BLOCK);
+    constexpr int BLOCK_DIM = 256;
+    const int N_BLOCKS = (numel + BLOCK_DIM - 1) / BLOCK_DIM;
+    const dim3 blockdim(BLOCK_DIM);
+    const dim3 griddim(N_BLOCKS);
+
+    assert(BLOCK_DIM * N_BLOCKS == numel);
 
     // TODO. check if can use 32bit indexing
     // TODO. handle different momentum type
     lion_update_kernel<scalar_t, scalar_t, uint64_t>
-        <<<blockdim, griddim, 0, c10::cuda::getCurrentCUDAStream()>>>(
+        <<<griddim, blockdim, 0, c10::cuda::getCurrentCUDAStream()>>>(
             reinterpret_cast<scalar_t *>(param.data_ptr()),
             reinterpret_cast<const scalar_t *>(grad.data_ptr()),
             reinterpret_cast<scalar_t *>(exp_avg.data_ptr()),
@@ -146,5 +150,6 @@ void lion_update(
             beta1,
             beta2,
             weight_decay);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
   });
 }
