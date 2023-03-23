@@ -7,46 +7,61 @@ from torch.optim.optimizer import Optimizer
 
 
 class Lion(Optimizer):
+    r"""Implements Lion algorithm.
+    copied straight out of google/AutoML for use as a reference implementation.
+    https://github.com/google/automl/blob/master/lion/lion_pytorch.py
+    """
+
     def __init__(
         self,
-        params: Iterable[Tensor],
+        params: Iterable[Parameter],
         lr: float = 1e-4,
         betas: Tuple[float, float] = (0.9, 0.99),
         weight_decay: float = 0.0,
     ) -> None:
-        if lr <= 0:
-            raise RuntimeError(f"expected positive LR, got {lr}")
-        if not all(0 <= beta <= 1 for beta in betas):
-            raise RuntimeError(f"betas must be between 0 and 1. got {betas}")
+        """Initialize the hyperparameters.
+        Args:
+          params (iterable): iterable of parameters to optimize or dicts defining
+            parameter groups
+          lr (float, optional): learning rate (default: 1e-4)
+          betas (Tuple[float, float], optional): coefficients used for computing
+            running averages of gradient and its square (default: (0.9, 0.99))
+          weight_decay (float, optional): weight decay coefficient (default: 0)
+        """
 
-        defaults = {"lr": lr, "betas": betas, "weight_decay": weight_decay}
+        if not 0.0 <= lr:
+            raise ValueError("Invalid learning rate: {}".format(lr))
+        if not 0.0 <= betas[0] < 1.0:
+            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+        if not 0.0 <= betas[1] < 1.0:
+            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
     @torch.no_grad()
-    def step(self):
-        for param_group in self.param_groups:
-            lr = param_group["lr"]
-            weight_decay = param_group["weight_decay"]
-            beta1, beta2 = param_group["betas"]
-            for param in filter(lambda p: p.grad is not None, param_group["params"]):
-                param: Parameter
-                grad: Tensor = param.grad
+    def step(self) -> None:
+        """Performs a single optimization step."""
+        for group in self.param_groups:
+            for p in group["params"]:
+                p: Tensor
+                if p.grad is None:
+                    continue
 
-                state = self.state[param]
-                # init state: exponential moving average of gradient value
+                # Perform stepweight decay
+                p.data.mul_(1 - group["lr"] * group["weight_decay"])
+
+                grad = p.grad
+                state = self.state[p]
+                # State initialization
                 if len(state) == 0:
-                    state["exp_avg"] = torch.zeros_like(param)
+                    # Exponential moving average of gradient values
+                    state["exp_avg"] = torch.zeros_like(p)
+
                 exp_avg: Tensor = state["exp_avg"]
+                beta1, beta2 = group["betas"]
 
-                # stepweight decay
-                param.data.mul_(1 - lr * weight_decay)
-
-                # weight update
-                update = exp_avg.clone()
-                update.mul_(beta1)
-                update.add_(grad, alpha=1 - beta1)
-                update.sign_()
-                param.add_(update, alpha=-lr)
-
-                # decay momentum running average coefficient
+                # Weight update
+                update = exp_avg * beta1 + grad * (1 - beta1)
+                p.add_(torch.sign(update), alpha=-group["lr"])
+                # Decay the momentum running average coefficient
                 exp_avg.mul_(beta2).add_(grad, alpha=1 - beta2)
