@@ -41,7 +41,7 @@ __global__ void lion_update_kernel(
 
   // grid-stride loop, with additional striding due to threads using
   // vectorized accesses
-  for (IdxT i = blockIdx.x * blockDim.x + threadIdx.x * ACCESS_N; i < numel;
+  for (IdxT i = (blockIdx.x * blockDim.x + threadIdx.x) * ACCESS_N; i < numel;
        i += blockDim.x * gridDim.x * ACCESS_N) {
 
     // load vectors into registers
@@ -75,7 +75,7 @@ __global__ void lion_update_kernel(
     // apply update
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
-      // TO
+      // TODO. make sure compiler uses FMA here
       param_vector.val[ii] =
           update_vector.val[ii] * neg_lr + param_vector.val[ii];
     }
@@ -88,6 +88,7 @@ __global__ void lion_update_kernel(
       momentum_vector.val[ii] *= beta2;
     }
     for (int ii = 0; ii < ACCESS_N; ++ii) {
+      // TODO. make sure compiler uses FMA here
       momentum_vector.val[ii] =
           grad_vector.val[ii] * beta2_complement + momentum_vector.val[ii];
     }
