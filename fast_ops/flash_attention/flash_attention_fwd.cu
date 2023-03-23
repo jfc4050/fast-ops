@@ -96,7 +96,8 @@ __global__ void flash_attn_fwd_kernel(
   cute::copy(Qi_load_partition_gmem, Qi_load_partition_smem);
 
   const int n_blocks_n = cutlass::ceil_div(seqlen_n, BLOCK_N);
-  for (int seq_block_n_idx = 0; seq_block_n_idx < n_blocks_n; ++seq_block_n_idx) {
+  for (int seq_block_n_idx = 0; seq_block_n_idx < n_blocks_n;
+       ++seq_block_n_idx) {
     const int seq_block_n0 = seq_block_n_idx * BLOCK_N;
 
     // load Kj into SRAM
