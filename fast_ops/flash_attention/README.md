@@ -27,12 +27,12 @@ O = FlashAttentionFunction.apply(Q, K, V)
 it via the attention bias.
 The kernel can use this as a signal to skip blocks it knows will be masked
 out anyways and performance will improve by ~2x. We also get to avoid loading
-the bias from memory.
+the bias from DRAM.
 * If you are doing sequence masking (e.g. sequence length different across
 batch elements), use a
 [Nested Tensor](https://pytorch.org/docs/stable/nested.html) rather than
 masking out padding tokens via the attention bias. The kernel can use this
-as a signal to skip computation. We also get to avoid loading the bias from memory.
+as a signal to skip computation. We also get to avoid loading the bias from DRAM.
 
 ## Limitations
 Violating any of these constraints will result in an exception.
