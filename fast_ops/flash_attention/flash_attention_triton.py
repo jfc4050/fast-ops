@@ -40,15 +40,6 @@ def make_dropout_mask(dropout_p, dropout_seed, indices):
     return a > (dropout_p * 4294967295).to(tl.uint32)
 
 
-# Disabling autotune for now, set num_warps=4 if headdim=64 and num_warps=8 if headdim=128
-# @triton.autotune(
-#     configs=[
-#         triton.Config({"BLOCK_M": 128, "BLOCK_N": 128}, num_warps=4, num_stages=1),
-#         # This config has a race condition when EVEN_M == False, disabling it for now.
-#         # triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=1),
-#     ],
-#     key=['CACHE_KEY_SEQLEN_Q', 'CACHE_KEY_SEQLEN_K', 'BIAS_TYPE', 'IS_CAUSAL', 'BLOCK_HEADDIM']
-# )
 @triton.heuristics(
     {
         "EVEN_M": lambda args: args["seqlen_q"] % args["BLOCK_M"] == 0,
@@ -378,7 +369,6 @@ def _bwd_kernel_one_col_block(
     seqlen_k,
     headdim,
     USE_DROPOUT: tl.constexpr,
-    ATOMIC_ADD: tl.constexpr,
     BIAS_TYPE: tl.constexpr,
     IS_CAUSAL: tl.constexpr,
     BLOCK_HEADDIM: tl.constexpr,
@@ -528,8 +518,7 @@ def _bwd_kernel_one_col_block(
 
         # compute dp = dot(v, do)
         # There seems to be a race condition when headdim=48/96, and dq, dk are wrong.
-        # Also wrong for headdim=128, seqlen=(108, 256), and ATOMIC_ADD=True
-        # Also wrong for headdim=64, seqlen=(1023, 1024), and ATOMIC_ADD=False
+        # Also wrong for headdim=128, seqlen=(108, 256)
         if not (EVEN_M & EVEN_HEADDIM):
             tl.debug_barrier()
         dp = tl.dot(do, v, trans_b=True)
@@ -579,73 +568,18 @@ def _bwd_kernel_one_col_block(
         dk += tl.dot(ds, q, trans_a=True).to(dk.dtype)
         # compute dq
         dq_ptrs = DQ + (offs_m_curr * stride_dqm)[:, None] + offs_d[None, :]
-        if not ATOMIC_ADD:
-            if EVEN_M & EVEN_HEADDIM:  # Race condition if we just do EVEN_M
-                dq = tl.load(dq_ptrs, eviction_policy="evict_last")
-                dq += tl.dot(ds, k)
-                tl.store(dq_ptrs, dq, eviction_policy="evict_last")
+        dq = tl.dot(ds, k)
+        if EVEN_M & EVEN_HEADDIM:  # Race condition if we just do EVEN_M
+            tl.atomic_add(dq_ptrs, dq)
+        else:
+            if EVEN_HEADDIM:
+                tl.atomic_add(dq_ptrs, dq, mask=offs_m_curr[:, None] < seqlen_q)
             else:
-                # inserted barriers between dQ load to smem tile and
-                # addition of dSij @ Kj to that tile.
-                # maybe the triton compiler isn't properly inserting
-                # __syncthreads() between loads to smem buffer and subsequent
-                # accumulation to the same buffer
-                #
-                # if i rearrange the code to look like this:
-                #
-                #   dq_tmp = tl.dot(ds, k)
-                #   dq = tl.load(...)
-                #   if not (EVEN_M & EVEN_HEADDIM):
-                #       tl.debug_barrier()
-                #   dq += dq_tmp
-                #
-                # it also gets rid of the race conditions which supports the theory,
-                # but not really sure.
-                if EVEN_HEADDIM:
-                    dq = tl.load(
-                        dq_ptrs,
-                        mask=offs_m_curr[:, None] < seqlen_q,
-                        other=0.0,
-                        eviction_policy="evict_last",
-                    )
-                    if not (EVEN_M & EVEN_HEADDIM):
-                        tl.debug_barrier()  # otherwise race condition when BIAS_TYPE != 'none'
-                    dq += tl.dot(ds, k)
-                    tl.store(
-                        dq_ptrs,
-                        dq,
-                        mask=offs_m_curr[:, None] < seqlen_q,
-                        eviction_policy="evict_last",
-                    )
-                else:
-                    dq = tl.load(
-                        dq_ptrs,
-                        mask=(offs_m_curr[:, None] < seqlen_q) & (offs_d[None, :] < headdim),
-                        other=0.0,
-                        eviction_policy="evict_last",
-                    )
-                    if not (EVEN_M & EVEN_HEADDIM):
-                        tl.debug_barrier()  # otherwise race condition when BIAS_TYPE != 'none'
-                    dq += tl.dot(ds, k)
-                    tl.store(
-                        dq_ptrs,
-                        dq,
-                        mask=(offs_m_curr[:, None] < seqlen_q) & (offs_d[None, :] < headdim),
-                        eviction_policy="evict_last",
-                    )
-        else:  # If we're parallelizing across the seqlen_k dimension
-            dq = tl.dot(ds, k)
-            if EVEN_M & EVEN_HEADDIM:  # Race condition if we just do EVEN_M
-                tl.atomic_add(dq_ptrs, dq)
-            else:
-                if EVEN_HEADDIM:
-                    tl.atomic_add(dq_ptrs, dq, mask=offs_m_curr[:, None] < seqlen_q)
-                else:
-                    tl.atomic_add(
-                        dq_ptrs,
-                        dq,
-                        mask=(offs_m_curr[:, None] < seqlen_q) & (offs_d[None, :] < headdim),
-                    )
+                tl.atomic_add(
+                    dq_ptrs,
+                    dq,
+                    mask=(offs_m_curr[:, None] < seqlen_q) & (offs_d[None, :] < headdim),
+                )
     # write-back
     dv_ptrs = DV + ((offs_n * stride_dvn)[:, None] + offs_d[None, :])
     dk_ptrs = DK + ((offs_n * stride_dkn)[:, None] + offs_d[None, :])
@@ -670,21 +604,12 @@ def init_to_zero(name):
 
 @triton.autotune(
     configs=[
-        # triton.Config({"BLOCK_M": 128, "BLOCK_N": 128, "SEQUENCE_PARALLEL": False}, num_warps=8, num_stages=1, pre_hook=init_to_zero('DQ')),
         triton.Config(
-            {"BLOCK_M": 128, "BLOCK_N": 128, "SEQUENCE_PARALLEL": True},
+            {"BLOCK_M": 128, "BLOCK_N": 128},
             num_warps=8,
             num_stages=1,
             pre_hook=init_to_zero("DQ"),
         ),
-        # TODO. THIS CONFIG BEING ENABLED CAUSES BUGS WHEN BLOCK_HEADDIM != 128
-        # triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "SEQUENCE_PARALLEL": True}, num_warps=4, num_stages=1, pre_hook=init_to_zero('DQ')),
-        # Other configs seem to give wrong results when seqlen_q % 128 != 0, disabling them for now
-        # # Kernel is buggy (give wrong result) if we set BLOCK_m=128, BLOCK_n=64, num_warps=*4*
-        # triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "SEQUENCE_PARALLEL": False}, num_warps=8, num_stages=1, pre_hook=init_to_zero('DQ')),
-        # triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "SEQUENCE_PARALLEL": True}, num_warps=8, num_stages=1, pre_hook=init_to_zero('DQ')),
-        # triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "SEQUENCE_PARALLEL": False}, num_warps=4, num_stages=1, pre_hook=init_to_zero('DQ')),
-        # triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "SEQUENCE_PARALLEL": True}, num_warps=4, num_stages=1, pre_hook=init_to_zero('DQ')),
     ],
     key=[
         "CACHE_KEY_SEQLEN_Q",
@@ -753,7 +678,6 @@ def _bwd_kernel(
     BIAS_TYPE: tl.constexpr,
     IS_CAUSAL: tl.constexpr,
     BLOCK_HEADDIM: tl.constexpr,
-    SEQUENCE_PARALLEL: tl.constexpr,
     EVEN_M: tl.constexpr,
     EVEN_N: tl.constexpr,
     EVEN_HEADDIM: tl.constexpr,
@@ -778,87 +702,44 @@ def _bwd_kernel(
     LSE += off_hb * seqlen_q_rounded
 
     dropout_rng_offset_hb = rng_offset + (off_hb * seqlen_q * seqlen_k)
-    if not SEQUENCE_PARALLEL:
-        num_block_n = tl.cdiv(seqlen_k, BLOCK_N)
-        for start_n in range(0, num_block_n):
-            _bwd_kernel_one_col_block(
-                start_n,
-                Q,
-                K,
-                V,
-                Bias,
-                DO,
-                DQ,
-                DK,
-                DV,
-                LSE,
-                D,
-                softmax_scale,
-                dropout_p,
-                rng_seed,
-                dropout_rng_offset_hb,
-                stride_qm,
-                stride_kn,
-                stride_vn,
-                stride_bm,
-                stride_dom,
-                stride_dqm,
-                stride_dkn,
-                stride_dvn,
-                seqlen_q,
-                seqlen_k,
-                headdim,
-                USE_DROPOUT=USE_DROPOUT,
-                ATOMIC_ADD=False,
-                BIAS_TYPE=BIAS_TYPE,
-                IS_CAUSAL=IS_CAUSAL,
-                BLOCK_HEADDIM=BLOCK_HEADDIM,
-                EVEN_M=EVEN_M,
-                EVEN_N=EVEN_N,
-                EVEN_HEADDIM=EVEN_HEADDIM,
-                BLOCK_M=BLOCK_M,
-                BLOCK_N=BLOCK_N,
-            )
-    else:
-        start_n = tl.program_id(0)
-        _bwd_kernel_one_col_block(
-            start_n,
-            Q,
-            K,
-            V,
-            Bias,
-            DO,
-            DQ,
-            DK,
-            DV,
-            LSE,
-            D,
-            softmax_scale,
-            dropout_p,
-            rng_seed,
-            dropout_rng_offset_hb,
-            stride_qm,
-            stride_kn,
-            stride_vn,
-            stride_bm,
-            stride_dom,
-            stride_dqm,
-            stride_dkn,
-            stride_dvn,
-            seqlen_q,
-            seqlen_k,
-            headdim,
-            USE_DROPOUT=USE_DROPOUT,
-            ATOMIC_ADD=True,
-            BIAS_TYPE=BIAS_TYPE,
-            IS_CAUSAL=IS_CAUSAL,
-            BLOCK_HEADDIM=BLOCK_HEADDIM,
-            EVEN_M=EVEN_M,
-            EVEN_N=EVEN_N,
-            EVEN_HEADDIM=EVEN_HEADDIM,
-            BLOCK_M=BLOCK_M,
-            BLOCK_N=BLOCK_N,
-        )
+    start_n = tl.program_id(0)
+    _bwd_kernel_one_col_block(
+        start_n,
+        Q,
+        K,
+        V,
+        Bias,
+        DO,
+        DQ,
+        DK,
+        DV,
+        LSE,
+        D,
+        softmax_scale,
+        dropout_p,
+        rng_seed,
+        dropout_rng_offset_hb,
+        stride_qm,
+        stride_kn,
+        stride_vn,
+        stride_bm,
+        stride_dom,
+        stride_dqm,
+        stride_dkn,
+        stride_dvn,
+        seqlen_q,
+        seqlen_k,
+        headdim,
+        USE_DROPOUT=USE_DROPOUT,
+        BIAS_TYPE=BIAS_TYPE,
+        IS_CAUSAL=IS_CAUSAL,
+        BLOCK_HEADDIM=BLOCK_HEADDIM,
+        EVEN_M=EVEN_M,
+        EVEN_N=EVEN_N,
+        EVEN_HEADDIM=EVEN_HEADDIM,
+        BLOCK_M=BLOCK_M,
+        BLOCK_N=BLOCK_N,
+    )
 
 
 def _flash_attn_forward(q, k, v, bias=None, causal=False, dropout_p=0.0, softmax_scale=None):
@@ -1028,7 +909,7 @@ def _flash_attn_backward(
     # BLOCK_N = 64
     # num_warps = 4
     grid = lambda META: (
-        triton.cdiv(seqlen_k, META["BLOCK_N"]) if META["SEQUENCE_PARALLEL"] else 1,
+        triton.cdiv(seqlen_k, META["BLOCK_N"]),
         batch * nheads,
     )
     _bwd_kernel[grid](
@@ -1081,7 +962,6 @@ def _flash_attn_backward(
         bias_type,
         causal,
         BLOCK_HEADDIM,
-        # SEQUENCE_PARALLEL=False,
         # BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N,
         # num_warps=num_warps,
         # num_stages=1,
