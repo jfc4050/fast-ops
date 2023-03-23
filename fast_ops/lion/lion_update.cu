@@ -8,8 +8,7 @@
 #define PRAGMA_UNROLL _Pragma("unroll")
 
 template <typename scalar_t> __device__ scalar_t sign(scalar_t x) {
-  int t = x < 0 ? -1 : 0;
-  return x > 0 ? 1 : t;
+  return x > 0 ? 1 : -1;
 }
 
 template <typename scalar_t, typename momentum_t, typename IdxT>
@@ -35,10 +34,10 @@ __global__ void lion_update_kernel(
   MomentumVectorT *momentum_vectors =
       reinterpret_cast<MomentumVectorT *>(exp_avg);
 
-  const scalar_t weight_decay_factor = 1.0 - lr * weight_decay;
-  const scalar_t beta1_complement = 1.0 - beta1;
-  const scalar_t beta2_complement = 1.0 - beta2;
-  const scalar_t neg_lr = -lr;
+  const float weight_decay_factor = 1.0 - lr * weight_decay;
+  const float beta1_complement = 1.0 - beta1;
+  const float beta2_complement = 1.0 - beta2;
+  const float neg_lr = -lr;
 
   // grid-stride loop, with additional striding due to threads using
   // vectorized accesses
@@ -51,12 +50,14 @@ __global__ void lion_update_kernel(
     MomentumVectorT momentum_vector = momentum_vectors[i];
 
     // apply weight decay
+    // p = p * (1.0 - lr * weight_decay)
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       param_vector.val[ii] *= weight_decay_factor;
     }
 
     // compute update
+    // update = beta1 * m_prev + (1 - beta1) * grad
     VectorT update_vector = momentum_vector;
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
@@ -85,6 +86,7 @@ __global__ void lion_update_kernel(
     param_vectors[i] = param_vector;
 
     // decay momentum
+    // m = beta2 * m_prev + (1 - beta2) * g
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       momentum_vector.val[ii] *= beta2;
     }
