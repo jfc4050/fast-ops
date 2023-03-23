@@ -1,4 +1,3 @@
-#include <pybind11/detail/common.h>
 #include <torch/extension.h>
 
 // forward declaration, defined in .cu file

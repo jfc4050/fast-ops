@@ -4,6 +4,26 @@ import torch
 from torch import Tensor
 from torch.nn import Parameter
 from torch.optim.optimizer import Optimizer
+import torch.utils.cpp_extension
+
+# monkey patching this for now so I can add in my own arch flags.
+# for some reason even when building with TORCH_CUDA_ARCH_LIST=8.0
+# it builds for an older architecture and thinks it only has 49152B (0xc000)
+# of shared memory.
+torch.utils.cpp_extension._get_cuda_arch_flags = lambda: []
+
+lion_ext = torch.utils.cpp_extension.load(
+    name="lion_optimizer",
+    sources=[
+        "fast_ops/lion/lion.cpp",
+        "fast_ops/lion/lion_update.cu",
+    ],
+    extra_cflags=["-std=c++17"],
+    # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/
+    extra_cuda_cflags=["--threads", "0", "-std=c++17", "--gpu-architecture=compute_80"],
+    with_cuda=True,
+    verbose=True,
+)
 
 
 class Lion(Optimizer):
@@ -38,15 +58,4 @@ class Lion(Optimizer):
                     state["exp_avg"] = torch.zeros_like(param)
                 exp_avg: Tensor = state["exp_avg"]
 
-                # stepweight decay
-                param.data.mul_(1 - lr * weight_decay)
-
-                # weight update
-                update = exp_avg.clone()
-                update.mul_(beta1)
-                update.add_(grad, alpha=1 - beta1)
-                update.sign_()
-                param.add_(update, alpha=-lr)
-
-                # decay momentum running average coefficient
-                exp_avg.mul_(beta2).add_(grad, alpha=1 - beta2)
+                lion_ext.lion_update(param, grad, exp_avg, lr, beta1, beta2, weight_decay)

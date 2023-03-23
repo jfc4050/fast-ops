@@ -42,7 +42,7 @@ __global__ void lion_update_kernel(
   // grid-stride loop, with additional striding due to threads using
   // vectorized accesses
   for (IdxT i = blockIdx.x * blockDim.x + threadIdx.x * ACCESS_N; i < numel;
-       i += blockDim.x * gridDim.x) {
+       i += blockDim.x * gridDim.x * ACCESS_N) {
 
     // load vectors into registers
     VectorT param_vector = param_vectors[i];
