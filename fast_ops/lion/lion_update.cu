@@ -72,7 +72,6 @@ __global__ void lion_update_kernel(
     for (int i = 0; i < ACCESS_N; ++i) {
       ;
     }
-
   }
 }
 
