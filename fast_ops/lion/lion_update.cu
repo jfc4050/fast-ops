@@ -128,12 +128,13 @@ void lion_update(
   CHECK_CONTIGUOUS(exp_avg);
 
   AT_DISPATCH_HALF_TYPES(param.scalar_type(), "lion_update", [&]() {
-    // TODO. check if can use 32bit indexing
     const int numel = param.numel();
-
     constexpr int BLOCK = 256;
     const dim3 blockdim(BLOCK);
     const dim3 griddim((numel + BLOCK - 1) / BLOCK);
+
+    // TODO. check if can use 32bit indexing
+    // TODO. handle different momentum type
     lion_update_kernel<scalar_t, scalar_t, uint64_t>
         <<<blockdim, griddim, 0, c10::cuda::getCurrentCUDAStream()>>>(
             reinterpret_cast<scalar_t *>(param.data_ptr()),
