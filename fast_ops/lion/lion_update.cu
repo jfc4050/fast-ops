@@ -1,5 +1,6 @@
 #include <ATen/Dispatch.h>
 #include <ATen/native/cuda/MemoryAccess.cuh>
+#include <c10/cuda/CUDAStream.h>
 #include <stdexcept>
 #include <torch/extension.h>
 
@@ -30,7 +31,8 @@ __global__ void lion_update_kernel(
 
   VectorT *param_vectors = reinterpret_cast<VectorT *>(param);
   const VectorT *grad_vectors = reinterpret_cast<const VectorT *>(grad);
-  MomentumVectorT *momentum_vectors = reinterpret_cast<MomentumVectorT *>(exp_avg);
+  MomentumVectorT *momentum_vectors =
+      reinterpret_cast<MomentumVectorT *>(exp_avg);
 
   const scalar_t weight_decay_factor = 1.0 - lr * weight_decay;
   const scalar_t beta1_complement = 1.0 - beta1;
@@ -74,7 +76,8 @@ __global__ void lion_update_kernel(
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       // TO
-      param_vector.val[ii] = update_vector.val[ii] * neg_lr + param_vector.val[ii];
+      param_vector.val[ii] =
+          update_vector.val[ii] * neg_lr + param_vector.val[ii];
     }
 
     // write back
@@ -126,14 +129,20 @@ void lion_update(
 
   AT_DISPATCH_HALF_TYPES(param.scalar_type(), "lion_update", [&]() {
     // TODO. check if can use 32bit indexing
-    lion_update_kernel<scalar_t, scalar_t, uint64_t><<<1, 1>>>(
-        reinterpret_cast<scalar_t*>(param.data_ptr()),
-        reinterpret_cast<const scalar_t*>(grad.data_ptr()),
-        reinterpret_cast<scalar_t*>(exp_avg.data_ptr()),
-        param.numel(),
-        lr,
-        beta1,
-        beta2,
-        weight_decay);
+    const int numel = param.numel();
+
+    constexpr int BLOCK = 256;
+    const dim3 blockdim(BLOCK);
+    const dim3 griddim((numel + BLOCK - 1) / BLOCK);
+    lion_update_kernel<scalar_t, scalar_t, uint64_t>
+        <<<blockdim, griddim, 0, c10::cuda::getCurrentCUDAStream()>>>(
+            reinterpret_cast<scalar_t *>(param.data_ptr()),
+            reinterpret_cast<const scalar_t *>(grad.data_ptr()),
+            reinterpret_cast<scalar_t *>(exp_avg.data_ptr()),
+            numel,
+            lr,
+            beta1,
+            beta2,
+            weight_decay);
   });
 }
