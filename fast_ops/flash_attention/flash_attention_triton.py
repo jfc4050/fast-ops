@@ -12,6 +12,9 @@ We use the FlashAttention implementation from Tri Dao
 as a starting point, who in turn used the FlashAttention implementation from Phil Tillet
 (https://github.com/openai/triton/blob/master/python/tutorials/06-fused-attention.py)
 as a starting point.
+
+This version adds dropout support and does some additional optimization, at the
+cost of breaking some input cases that worked in Tri Dao's implementation.
 """
 
 import math
