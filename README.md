@@ -5,6 +5,9 @@
 Algorithm from [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/pdf/2205.14135.pdf).
 Significantly faster than vanilla attention due to fused implementation, and also
 has $O(n)$ rather than $O(n^2)$ memory complexity.
+* **[(Fused) Lion Optimizer](fast_ops/lion/README.md):**
+Optimizer described in [Symbolic Discovery of Optimization Algorithms](https://arxiv.org/pdf/2302.06675.pdf).
+Claims some improved convergence properties and optimizer states only consists of half precision momentum.
 
 # Development
 
