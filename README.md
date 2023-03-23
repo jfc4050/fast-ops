@@ -1,4 +1,5 @@
-**fast-ops** is a (personal project) library containing efficient PyTorch operators.
+**fast-ops** is a personal project library containing efficient PyTorch operators,
+usually targeting (NVIDIA) GPUs.
 
 Generally, we focus on operators that aren't already implemented in other high-performance
 operator libraries, unless we feel we can beat them on performance, features, or usability.
