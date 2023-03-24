@@ -39,16 +39,15 @@ __global__ void lion_update_kernel(
   const float beta2_complement = 1.0 - beta2;
   const float neg_lr = -lr;
 
-  // grid-stride loop, with additional striding due to threads using
-  // vectorized accesses
-  // TODO. need to add a bounds check
-  for (IdxT i = blockIdx.x * blockDim.x + threadIdx.x; i * ACCESS_N < numel;
-       i += blockDim.x * gridDim.x) {
+  // grid-stride loop
+  for (IdxT vec_idx = blockIdx.x * blockDim.x + threadIdx.x;
+       vec_idx * ACCESS_N < numel;
+       vec_idx += blockDim.x * gridDim.x) {
 
     // load vectors into registers
-    VectorT param_vector = param_vectors[i];
-    const VectorT grad_vector = grad_vectors[i];
-    MomentumVectorT momentum_vector = momentum_vectors[i];
+    VectorT param_vector = param_vectors[vec_idx];
+    const VectorT grad_vector = grad_vectors[vec_idx];
+    MomentumVectorT momentum_vector = momentum_vectors[vec_idx];
 
     // apply weight decay
     // p = p * (1.0 - lr * weight_decay)
@@ -84,7 +83,7 @@ __global__ void lion_update_kernel(
     }
 
     // write back
-    param_vectors[i] = param_vector;
+    param_vectors[vec_idx] = param_vector;
 
     // decay momentum
     // m = beta2 * m_prev + (1 - beta2) * g
@@ -98,7 +97,7 @@ __global__ void lion_update_kernel(
     }
 
     // write back momentum
-    momentum_vectors[i] = momentum_vector;
+    momentum_vectors[vec_idx] = momentum_vector;
   }
 }
 
