@@ -20,7 +20,7 @@ def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
     betas = (0.9, 0.99)
 
     master_params = [
-        torch.randn(32, requires_grad=True, dtype=dtype, device="cuda") for _ in range(3)
+        torch.randn(8192 * 8192, requires_grad=True, dtype=dtype, device="cuda") for _ in range(3)
     ]
     params = [p.clone().detach() for p in master_params]
     params_ref = [p.clone().detach() for p in master_params]
