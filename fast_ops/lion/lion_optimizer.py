@@ -27,6 +27,11 @@ lion_ext = torch.utils.cpp_extension.load(
 
 
 class Lion(Optimizer):
+    """
+    Lion Optimizer, as described in "Symbolic Discovery of Optimization Algorithms"
+    (https://arxiv.org/pdf/2302.06675.pdf)
+    """
+
     def __init__(
         self,
         params: Iterable[Parameter],
@@ -34,6 +39,15 @@ class Lion(Optimizer):
         betas: Tuple[float, float] = (0.9, 0.99),
         weight_decay: float = 0.0,
     ) -> None:
+        """
+        :param params: iterable of parameters to optimize or dicts defining
+          parameter groups
+        :param lr: learning rate
+        :param betas: coefficients used for computing
+          running averages of gradient and its square
+        :param weight_decay: weight decay coefficient
+        """
+
         if lr <= 0:
             raise RuntimeError(f"expected positive LR, got {lr}")
         if not all(0 <= beta <= 1 for beta in betas):
@@ -43,7 +57,7 @@ class Lion(Optimizer):
         super().__init__(params, defaults)
 
     @torch.no_grad()
-    def step(self):
+    def step(self) -> None:
         for param_group in self.param_groups:
             lr = param_group["lr"]
             weight_decay = param_group["weight_decay"]
