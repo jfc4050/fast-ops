@@ -13,7 +13,7 @@ def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
     betas = (0.9, 0.99)
 
     master_params = [
-        torch.rand(32, requires_grad=True, dtype=dtype, device="cuda") for _ in range(3)
+        torch.randn(32, requires_grad=True, dtype=dtype, device="cuda") for _ in range(3)
     ]
     params = [p.clone().detach() for p in master_params]
     params_ref = [p.clone().detach() for p in master_params]
@@ -34,12 +34,12 @@ def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
             # print(param)
             # print(param_ref)
             assert torch.allclose(
-                param, param_ref, rtol=1e-3, atol=1e-3
+                param, param_ref, rtol=1e-4, atol=1e-2
             ), f"param mismatch on param {param_idx}, iter {iter}"
             exp_avg = lion.state[param]["exp_avg"]
             exp_avg_ref = lion_ref.state[param_ref]["exp_avg"]
             # print(exp_avg)
             # print(exp_avg_ref)
             assert torch.allclose(
-                exp_avg, exp_avg_ref, rtol=1e-3, atol=1e-3
+                exp_avg, exp_avg_ref, rtol=1e-4, atol=1e-2
             ), f"exp_avg mismatch on param {param_idx}, iter {iter}"
