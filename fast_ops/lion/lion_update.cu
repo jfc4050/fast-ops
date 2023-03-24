@@ -7,7 +7,8 @@
 
 #define PRAGMA_UNROLL _Pragma("unroll")
 
-template <typename scalar_t> __device__ scalar_t sign(scalar_t x) {
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t sign(scalar_t x) {
   return x > 0 ? 1 : -1;
 }
 
@@ -46,6 +47,8 @@ __global__ void lion_update_kernel(
     VectorT param_vector = param_vectors[vec_idx];
     const VectorT grad_vector = grad_vectors[vec_idx];
     ExpAvgVectorT momentum_vector = momentum_vectors[vec_idx];
+
+    // TODO. make sure compiler vectorizes for each of the loops over ACCESS_N
 
     // apply weight decay
     // p = p * (1.0 - lr * weight_decay)
