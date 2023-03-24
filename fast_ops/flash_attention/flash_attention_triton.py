@@ -29,6 +29,7 @@ import triton.language as tl
 @triton.jit
 def make_dropout_mask(dropout_p, dropout_seed, indices):
     """integer hashing function rather than using philox PRNG. ends up being a lot faster
+    and still passes my statistical tests.
     see http://burtleburtle.net/bob/hash/integer.html
     """
     a = indices.to(tl.uint32, bitcast=True)

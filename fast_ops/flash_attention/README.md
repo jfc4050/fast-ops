@@ -1,5 +1,12 @@
 # Multi-Head Attention
 
+> 🚨 The CUTLASS FlashAttention implementation described below is still WIP.
+in the meantime there's a Triton implementation [here](flash_attention_triton.py).
+Unfortunately it's somewhat picky about input sizes. If it does accept your inputs
+its the fastest FlashAttention kernel i'm aware of for sequence lengths > 4096
+(the HazyResearch CUDA implementation is still faster for shorter
+sequence lengths).
+
 **See FlashAttention paper:
 [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/pdf/2205.14135.pdf)**
 
