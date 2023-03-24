@@ -41,8 +41,9 @@ __global__ void lion_update_kernel(
 
   // grid-stride loop, with additional striding due to threads using
   // vectorized accesses
-  for (IdxT i = (blockIdx.x * blockDim.x + threadIdx.x) * ACCESS_N; i < numel;
-       i += blockDim.x * gridDim.x * ACCESS_N) {
+  // TODO. need to add a bounds check
+  for (IdxT i = blockIdx.x * blockDim.x + threadIdx.x; i * ACCESS_N < numel;
+       i += blockDim.x * gridDim.x) {
 
     // load vectors into registers
     VectorT param_vector = param_vectors[i];
@@ -57,7 +58,7 @@ __global__ void lion_update_kernel(
     }
 
     // compute update
-    // update = beta1 * m_prev + (1 - beta1) * grad
+    // update = sign(beta1 * m_prev + (1 - beta1) * grad)
     VectorT update_vector = momentum_vector;
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
@@ -135,15 +136,12 @@ void lion_update(
     const int numel = param.numel();
     constexpr int BLOCK_DIM = 256;
     const int N_BLOCKS = (numel + BLOCK_DIM - 1) / BLOCK_DIM;
-    const dim3 blockdim(BLOCK_DIM);
-    const dim3 griddim(N_BLOCKS);
-
-    assert(BLOCK_DIM * N_BLOCKS == numel);
+    assert(numel % 8 == 0);
 
     // TODO. check if can use 32bit indexing
     // TODO. handle different momentum type
     lion_update_kernel<scalar_t, scalar_t, uint64_t>
-        <<<griddim, blockdim, 0, c10::cuda::getCurrentCUDAStream()>>>(
+        <<<N_BLOCKS, BLOCK_DIM, 0, c10::cuda::getCurrentCUDAStream()>>>(
             reinterpret_cast<scalar_t *>(param.data_ptr()),
             reinterpret_cast<const scalar_t *>(grad.data_ptr()),
             reinterpret_cast<scalar_t *>(exp_avg.data_ptr()),
