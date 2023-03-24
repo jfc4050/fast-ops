@@ -5,7 +5,7 @@
 Fused Lion implementation 😾
 
 ## Benchmarks
-First draft is about 3x faster than the
+First working version is about 3x faster than the
 [vanilla implementation taken from Google AutoML](https://github.com/google/automl/blob/master/lion/lion_pytorch.py).
 Gap would probably be smaller if we let `torch.jit` fuse some of it
 (needs some reworking/rearranging to enable this).
