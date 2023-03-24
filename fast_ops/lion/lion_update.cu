@@ -34,10 +34,10 @@ __global__ void lion_update_kernel(
   MomentumVectorT *momentum_vectors =
       reinterpret_cast<MomentumVectorT *>(exp_avg);
 
-  const float weight_decay_factor = 1.0 - lr * weight_decay;
-  const float beta1_complement = 1.0 - beta1;
-  const float beta2_complement = 1.0 - beta2;
-  const float neg_lr = -lr;
+  const scalar_t weight_decay_factor = 1.0 - lr * weight_decay;
+  const scalar_t beta1_complement = 1.0 - beta1;
+  const scalar_t beta2_complement = 1.0 - beta2;
+  const scalar_t neg_lr = -lr;
 
   // grid-stride loop
   for (IdxT vec_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -61,7 +61,7 @@ __global__ void lion_update_kernel(
     VectorT update_vector = momentum_vector;
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
-      update_vector.val[ii] *= beta1;
+      update_vector.val[ii] *= static_cast<scalar_t>(beta1);
     }
     PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
@@ -88,7 +88,7 @@ __global__ void lion_update_kernel(
     // decay momentum
     // m = beta2 * m_prev + (1 - beta2) * g
     for (int ii = 0; ii < ACCESS_N; ++ii) {
-      momentum_vector.val[ii] *= beta2;
+      momentum_vector.val[ii] *= static_cast<scalar_t>(beta2);
     }
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       // TODO. make sure compiler uses FMA here
@@ -125,7 +125,6 @@ void lion_update(
   const int param_numel = param.numel();
 
   // TODO. assert dtypes
-  // TODO. assert sizes
 
   CHECK_CONTIGUOUS(param);
   CHECK_CONTIGUOUS(grad);
