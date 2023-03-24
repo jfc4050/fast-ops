@@ -7,16 +7,16 @@ from fast_ops.lion.lion_optimizer_ref import Lion as LionRef
 
 torch.set_printoptions(sci_mode=False, linewidth=200)
 
+
 @pytest.mark.parametrize("weight_decay", [0.0, 0.5])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16], ids=str)
 def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
-
     def __print_tensor_diff(x: Tensor, x_ref: Tensor):
         print(x.view(-1, 8))
         print(x_ref.view(-1, 8))
         print((x - x_ref).abs().view(-1, 8))
 
-    lr = 1e-2
+    lr = 1e-3
     betas = (0.9, 0.99)
 
     master_params = [
