@@ -11,11 +11,11 @@ template <typename scalar_t> __device__ scalar_t sign(scalar_t x) {
   return x > 0 ? 1 : -1;
 }
 
-template <typename scalar_t, typename momentum_t, typename IdxT>
+template <typename scalar_t, typename exp_avg_t, typename IdxT>
 __global__ void lion_update_kernel(
     scalar_t *__restrict__ param,
     const scalar_t *__restrict__ grad,
-    momentum_t *__restrict__ exp_avg,
+    exp_avg_t *__restrict__ exp_avg,
     const int numel,
     const float lr,
     const float beta1,
@@ -23,16 +23,14 @@ __global__ void lion_update_kernel(
     const float weight_decay) {
 
   // 128bit/16byte access per thread
-  static_assert(sizeof(scalar_t) == sizeof(momentum_t), "restriction for now");
+  static_assert(sizeof(scalar_t) == sizeof(exp_avg_t), "restriction for now");
   constexpr int ACCESS_N = 16 / sizeof(scalar_t);
   using VectorT = at::native::memory::aligned_vector<scalar_t, ACCESS_N>;
-  using MomentumVectorT =
-      at::native::memory::aligned_vector<momentum_t, ACCESS_N>;
+  using ExpAvgVectorT = at::native::memory::aligned_vector<exp_avg_t, ACCESS_N>;
 
   VectorT *param_vectors = reinterpret_cast<VectorT *>(param);
   const VectorT *grad_vectors = reinterpret_cast<const VectorT *>(grad);
-  MomentumVectorT *momentum_vectors =
-      reinterpret_cast<MomentumVectorT *>(exp_avg);
+  ExpAvgVectorT *momentum_vectors = reinterpret_cast<ExpAvgVectorT *>(exp_avg);
 
   const scalar_t weight_decay_factor = 1.0 - lr * weight_decay;
   const scalar_t beta1_complement = 1.0 - beta1;
@@ -47,7 +45,7 @@ __global__ void lion_update_kernel(
     // load vectors into registers
     VectorT param_vector = param_vectors[vec_idx];
     const VectorT grad_vector = grad_vectors[vec_idx];
-    MomentumVectorT momentum_vector = momentum_vectors[vec_idx];
+    ExpAvgVectorT momentum_vector = momentum_vectors[vec_idx];
 
     // apply weight decay
     // p = p * (1.0 - lr * weight_decay)
