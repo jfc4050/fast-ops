@@ -56,7 +56,6 @@ def _fwd_kernel(
     Bias,
     Out,
     Lse,
-    TMP,  # NOTE: TMP is a scratchpad buffer to workaround a compiler bug
     softmax_scale,
     dropout_p,
     rng_seed,
@@ -108,7 +107,6 @@ def _fwd_kernel(
     K = K + off_b * stride_kb + off_h * stride_kh
     V = V + off_b * stride_vb + off_h * stride_vh
     Out = Out + off_b * stride_ob + off_h * stride_oh
-    TMP = TMP + off_hb * seqlen_q_rounded
     Lse = Lse + off_hb * seqlen_q_rounded
     if BIAS_TYPE != "none":
         Bias = Bias + off_b * stride_bb + off_h * stride_bh
@@ -221,8 +219,8 @@ def _fwd_kernel(
                     mask=(offs_n_iter[:, None] < seqlen_k) & (offs_d[None, :] < headdim),
                     other=0.0,
                 )
-        p = p.to(v.dtype)
-        acc_o += tl.dot(p, v)
+
+        acc_o += tl.dot(p.to(v.dtype), v)
 
         # -- update statistics
         m_i = m_ij
@@ -660,7 +658,6 @@ def _flash_attn_forward(q, k, v, bias=None, causal=False, dropout_p=0.0, softmax
 
     seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
     lse = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
-    tmp = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
     o = torch.empty_like(q)
 
     BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
@@ -677,7 +674,6 @@ def _flash_attn_forward(q, k, v, bias=None, causal=False, dropout_p=0.0, softmax
         bias,
         o,
         lse,
-        tmp,
         softmax_scale,
         dropout_p,
         rng_seed,
