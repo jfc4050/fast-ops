@@ -15,6 +15,12 @@ as a starting point.
 
 This version adds dropout support and does some additional optimization, at the
 cost of breaking some input cases that worked in Tri Dao's implementation.
+
+TODOs:
+* upgrade triton version
+* block-sparse attention
+* NestedTensor support
+* bias gradient support
 """
 
 import math
