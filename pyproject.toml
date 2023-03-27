@@ -8,7 +8,7 @@ packages = [{include = "fast_ops"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-triton = "2.0.0.dev20221202"
+triton = "2.0.0.post1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.1.0"

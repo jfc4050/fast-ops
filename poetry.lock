@@ -185,6 +185,17 @@ files = [
 ]
 
 [[package]]
+name = "lit"
+version = "16.0.0"
+description = "A Software Testing Tool"
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "lit-16.0.0.tar.gz", hash = "sha256:3c4ac372122a1de4a88deb277b956f91b7209420a0bef683b1ab2d2b16dabe11"},
+]
+
+[[package]]
 name = "mypy-extensions"
 version = "1.0.0"
 description = "Type system extensions for programs checked with the mypy type checker."
@@ -466,26 +477,27 @@ opt-einsum = ["opt-einsum (>=3.3)"]
 
 [[package]]
 name = "triton"
-version = "2.0.0.dev20221202"
+version = "2.0.0.post1"
 description = "A language and compiler for custom Deep Learning operations"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "triton-2.0.0.dev20221202-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:261e2021b484bd97e2006454f4fc45f9823a3aff4f58e4cc44ac9f3df0d63174"},
-    {file = "triton-2.0.0.dev20221202-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:22659201d94f36d2eb8d6974a02a08ac862a89d0472ac7395656528a21d6530b"},
-    {file = "triton-2.0.0.dev20221202-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:092aa042ba00b097b6b9938297c3126f913d1b2458e4aa5ed60816eee1ebbeb0"},
-    {file = "triton-2.0.0.dev20221202-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9c2d4b15d2e77baf3ae5adb844eb105c59697129f17d6864514eefcdb01ce07b"},
-    {file = "triton-2.0.0.dev20221202-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:90f54d108780a6e1b7ae9774b7b1ebed5c067ec455e74491dd60593fe42aea1f"},
-    {file = "triton-2.0.0.dev20221202-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:42b3c00ffdc6311ee60318df72a5bddccc9e45951a5837c19d19ef93c72e8186"},
-    {file = "triton-2.0.0.dev20221202-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8e92e8d111a7bc843aeb2b782638b34d4db108d1f66e2e4b2d026cda6154a9cb"},
-    {file = "triton-2.0.0.dev20221202-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:63faa1886dcd2d74c23bceea6bfcf0633a760ccaacf365824ec25318eadf02cc"},
-    {file = "triton-2.0.0.dev20221202-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3de426bc9078ab228e3ac8ab7f38bff94135df088ce6238a563d055a032aa16c"},
+    {file = "triton-2.0.0.post1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7b396a8677ace9e3ca80587bcfcc5eb9e2ddeb7274b9bb52c7cb688f20061b77"},
+    {file = "triton-2.0.0.post1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7d755359bafcb88a44ef574579f90b9dfbb6d3f1cb87c7424f5bc8d62d19465b"},
+    {file = "triton-2.0.0.post1-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cbe0d575bf46f79339212ea60f4005feadde296713c66570ec53cd6f9e1522bd"},
+    {file = "triton-2.0.0.post1-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5c1bd94503f92833ee6ef56300ff396e52a84c4904d0d9fb6fd947dd1a003ea0"},
+    {file = "triton-2.0.0.post1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:df61a3a5bd1c9920eb26a79194e04b6ade8062b9c9ec35e549e476b7e383ae16"},
+    {file = "triton-2.0.0.post1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a36984779bd470412887a7755708fc391c369cc00c2395ec71c3b33139828704"},
+    {file = "triton-2.0.0.post1-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2a9bcddfb73db0843520a32f26e1ca99dc3fe08d7472aeb365605b35a07a6d4e"},
+    {file = "triton-2.0.0.post1-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c4e72ba39a55b76ec721a82e1ad17aa0780adf3a65fe0e92c7f06b40f04b0f82"},
+    {file = "triton-2.0.0.post1-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:206c37456255f1289ddd4623a28f75d50c059edd920039e842db8b59ce8b03c4"},
 ]
 
 [package.dependencies]
 cmake = "*"
 filelock = "*"
+lit = "*"
 torch = "*"
 
 [package.extras]
@@ -522,4 +534,4 @@ test = ["pytest (>=6.0.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "b76875932ae01389a5f91f4cfe5baa355b6cc995066bf54b4393f96ef9525cd1"
+content-hash = "00cf8be393b03d1ee88d256757077ac2abe9f5eb9efe3294cf508976d6a483a4"
