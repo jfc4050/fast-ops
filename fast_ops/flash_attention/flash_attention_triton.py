@@ -310,38 +310,6 @@ def _bwd_preprocess_do_o_dot(
 
 
 @triton.jit
-def _bwd_store_dk_dv(
-    dk_ptrs,
-    dv_ptrs,
-    dk,
-    dv,
-    offs_n,
-    offs_d,
-    seqlen_k,
-    headdim,
-    EVEN_M: tl.constexpr,
-    EVEN_N: tl.constexpr,
-    EVEN_HEADDIM: tl.constexpr,
-):
-    # [2022-11-01] TD: Same bug. In the case of EVEN_N=True and EVEN_M=False,
-    # if we just call tl.store(dv_ptrs), there's a race condition
-    if EVEN_N & EVEN_M:
-        if EVEN_HEADDIM:
-            tl.store(dv_ptrs, dv)
-            tl.store(dk_ptrs, dk)
-        else:
-            tl.store(dv_ptrs, dv, mask=offs_d[None, :] < headdim)
-            tl.store(dk_ptrs, dk, mask=offs_d[None, :] < headdim)
-    else:
-        if EVEN_HEADDIM:
-            tl.store(dv_ptrs, dv, mask=offs_n[:, None] < seqlen_k)
-            tl.store(dk_ptrs, dk, mask=offs_n[:, None] < seqlen_k)
-        else:
-            tl.store(dv_ptrs, dv, mask=(offs_n[:, None] < seqlen_k) & (offs_d[None, :] < headdim))
-            tl.store(dk_ptrs, dk, mask=(offs_n[:, None] < seqlen_k) & (offs_d[None, :] < headdim))
-
-
-@triton.jit
 def _bwd_kernel_one_col_block(
     start_n,
     Q,
@@ -584,19 +552,22 @@ def _bwd_kernel_one_col_block(
     # write-back
     dv_ptrs = DV + ((offs_n * stride_dvn)[:, None] + offs_d[None, :])
     dk_ptrs = DK + ((offs_n * stride_dkn)[:, None] + offs_d[None, :])
-    _bwd_store_dk_dv(
-        dk_ptrs,
-        dv_ptrs,
-        dk,
-        dv,
-        offs_n,
-        offs_d,
-        seqlen_k,
-        headdim,
-        EVEN_M=EVEN_M,
-        EVEN_N=EVEN_N,
-        EVEN_HEADDIM=EVEN_HEADDIM,
-    )
+    # [2022-11-01] TD: Same bug. In the case of EVEN_N=True and EVEN_M=False,
+    # if we just call tl.store(dv_ptrs), there's a race condition
+    if EVEN_N & EVEN_M:
+        if EVEN_HEADDIM:
+            tl.store(dv_ptrs, dv)
+            tl.store(dk_ptrs, dk)
+        else:
+            tl.store(dv_ptrs, dv, mask=offs_d[None, :] < headdim)
+            tl.store(dk_ptrs, dk, mask=offs_d[None, :] < headdim)
+    else:
+        if EVEN_HEADDIM:
+            tl.store(dv_ptrs, dv, mask=offs_n[:, None] < seqlen_k)
+            tl.store(dk_ptrs, dk, mask=offs_n[:, None] < seqlen_k)
+        else:
+            tl.store(dv_ptrs, dv, mask=(offs_n[:, None] < seqlen_k) & (offs_d[None, :] < headdim))
+            tl.store(dk_ptrs, dk, mask=(offs_n[:, None] < seqlen_k) & (offs_d[None, :] < headdim))
 
 
 def init_to_zero(name):
