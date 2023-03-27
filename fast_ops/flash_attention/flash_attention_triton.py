@@ -635,221 +635,6 @@ def _bwd_kernel(
             tl.store(dk_ptrs, dk, mask=(offs_n[:, None] < seqlen_k) & (offs_d[None, :] < headdim))
 
 
-def _flash_attn_forward(q, k, v, bias=None, causal=False, dropout_p=0.0, softmax_scale=None):
-    # shape constraints
-    batch, seqlen_q, nheads, d = q.shape
-    _, seqlen_k, _, _ = k.shape
-    assert k.shape == (batch, seqlen_k, nheads, d)
-    assert v.shape == (batch, seqlen_k, nheads, d)
-    assert d <= 128, "FlashAttention only support head dimensions up to 128"
-    assert q.dtype == k.dtype == v.dtype, "All tensors must have the same type"
-    assert q.dtype in [torch.float16, torch.bfloat16], "Only support fp16 and bf16"
-    assert q.is_cuda and k.is_cuda and v.is_cuda
-    softmax_scale = softmax_scale or 1.0 / math.sqrt(d)
-
-    has_bias = bias is not None
-    bias_type = "none"
-    if has_bias:
-        assert bias.dtype in [q.dtype, torch.float]
-        assert bias.is_cuda
-        assert bias.dim() == 4
-        if bias.stride(-1) != 1:
-            bias = bias.contiguous()
-        if bias.shape[2:] == (1, seqlen_k):
-            bias_type = "vector"
-        elif bias.shape[2:] == (seqlen_q, seqlen_k):
-            bias_type = "matrix"
-        else:
-            raise RuntimeError(
-                "Last 2 dimensions of bias must be (1, seqlen_k)" " or (seqlen_q, seqlen_k)"
-            )
-        bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
-    bias_strides = (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
-
-    seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
-    lse = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
-    tmp = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
-    o = torch.empty_like(q)
-
-    BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
-    BLOCK = 128
-    num_warps = 4 if d <= 64 else 8
-    grid = lambda META: (triton.cdiv(seqlen_q, META["BLOCK_M"]), batch * nheads)
-
-    rng_seed, rng_offset = increment_philox_state(batch * nheads * seqlen_q * seqlen_k)
-
-    _fwd_kernel[grid](
-        q,
-        k,
-        v,
-        bias,
-        o,
-        lse,
-        tmp,
-        softmax_scale,
-        dropout_p,
-        rng_seed,
-        rng_offset,
-        q.stride(0),
-        q.stride(2),
-        q.stride(1),
-        k.stride(0),
-        k.stride(2),
-        k.stride(1),
-        v.stride(0),
-        v.stride(2),
-        v.stride(1),
-        *bias_strides,
-        o.stride(0),
-        o.stride(2),
-        o.stride(1),
-        nheads,
-        seqlen_q,
-        seqlen_k,
-        seqlen_q_rounded,
-        d,
-        seqlen_q // 32,
-        seqlen_k // 32,  # key for triton cache (limit number of compilations)
-        dropout_p > 0.0,  # USE_DROPOUT
-        bias_type,
-        causal,
-        BLOCK_HEADDIM,
-        BLOCK_M=BLOCK,
-        BLOCK_N=BLOCK,
-        num_warps=num_warps,
-        num_stages=2,
-    )
-
-    return o, lse, softmax_scale, rng_seed, rng_offset  # softmax_scale could have been updated
-
-
-def _flash_attn_backward(
-    do,
-    q,
-    k,
-    v,
-    o,
-    lse,
-    dq,
-    dk,
-    dv,
-    bias=None,
-    causal=False,
-    dropout_p=0.0,
-    rng_seed=None,
-    rng_offset=None,
-    softmax_scale=None,
-):
-    # Make sure that the last dimension is contiguous
-    if do.stride(-1) != 1:
-        do = do.contiguous()
-    batch, seqlen_q, nheads, d = q.shape
-    _, seqlen_k, _, _ = k.shape
-    assert seqlen_q % 128 == 0
-    assert seqlen_k % 128 == 0
-    assert d == 128
-    seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
-    assert lse.shape == (batch, nheads, seqlen_q_rounded)
-    assert q.stride(-1) == k.stride(-1) == v.stride(-1) == o.stride(-1) == 1
-    assert dq.stride(-1) == dk.stride(-1) == dv.stride(-1) == 1
-    softmax_scale = softmax_scale or 1.0 / math.sqrt(d)
-    dq_accum = torch.empty_like(q, dtype=torch.float32)
-    delta = torch.empty_like(lse)
-
-    BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
-    grid = lambda META: (triton.cdiv(seqlen_q, META["BLOCK_M"]), batch * nheads)
-    _bwd_preprocess_do_o_dot[grid](
-        o,
-        do,
-        delta,
-        o.stride(0),
-        o.stride(2),
-        o.stride(1),
-        do.stride(0),
-        do.stride(2),
-        do.stride(1),
-        nheads,
-        seqlen_q,
-        seqlen_q_rounded,
-        d,
-        BLOCK_M=128,
-        BLOCK_HEADDIM=BLOCK_HEADDIM,
-    )
-
-    has_bias = bias is not None
-    bias_type = "none"
-    if has_bias:
-        assert bias.dtype in [q.dtype, torch.float]
-        assert bias.is_cuda
-        assert bias.dim() == 4
-        assert bias.stride(-1) == 1
-        if bias.shape[2:] == (1, seqlen_k):
-            bias_type = "vector"
-        elif bias.shape[2:] == (seqlen_q, seqlen_k):
-            bias_type = "matrix"
-        else:
-            raise RuntimeError(
-                "Last 2 dimensions of bias must be (1, seqlen_k)" " or (seqlen_q, seqlen_k)"
-            )
-        bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
-    bias_strides = (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
-
-    grid = lambda META: (
-        triton.cdiv(seqlen_k, META["BLOCK_N"]),
-        batch * nheads,
-    )
-    _bwd_kernel[grid](
-        q,
-        k,
-        v,
-        bias,
-        do,
-        dq_accum,
-        dk,
-        dv,
-        lse,
-        delta,
-        softmax_scale,
-        dropout_p,
-        rng_seed,
-        rng_offset,
-        q.stride(0),
-        q.stride(2),
-        q.stride(1),
-        k.stride(0),
-        k.stride(2),
-        k.stride(1),
-        v.stride(0),
-        v.stride(2),
-        v.stride(1),
-        *bias_strides,
-        do.stride(0),
-        do.stride(2),
-        do.stride(1),
-        dq_accum.stride(0),
-        dq_accum.stride(2),
-        dq_accum.stride(1),
-        dk.stride(0),
-        dk.stride(2),
-        dk.stride(1),
-        dv.stride(0),
-        dv.stride(2),
-        dv.stride(1),
-        nheads,
-        seqlen_q,
-        seqlen_k,
-        seqlen_q_rounded,
-        d,
-        seqlen_q // 32,
-        seqlen_k // 32,  # key for triton cache (limit number of compilations)
-        dropout_p > 0.0,  # USE_DROPOUT
-        bias_type,
-        causal,
-        BLOCK_HEADDIM,
-    )
-    dq.copy_(dq_accum)
-
-
 def increment_philox_state(increment: int) -> tuple:
     """
     1. extract the current rng seed and offset
@@ -941,12 +726,97 @@ class FlashAttnTritonFunction(torch.autograd.Function):
         """
         # Make sure that the last dimension is contiguous
         q, k, v = [x if x.stride(-1) == 1 else x.contiguous() for x in [q, k, v]]
-        o, lse, ctx.softmax_scale, ctx.dropout_seed, ctx.dropout_offset = _flash_attn_forward(
-            q, k, v, bias=bias, causal=causal, dropout_p=dropout_p, softmax_scale=softmax_scale
+        # shape constraints
+
+        batch, seqlen_q, nheads, d = q.shape
+        _, seqlen_k, _, _ = k.shape
+        assert k.shape == (batch, seqlen_k, nheads, d)
+        assert v.shape == (batch, seqlen_k, nheads, d)
+        assert d <= 128, "FlashAttention only support head dimensions up to 128"
+        assert q.dtype == k.dtype == v.dtype, "All tensors must have the same type"
+        assert q.dtype in [torch.float16, torch.bfloat16], "Only support fp16 and bf16"
+        assert q.is_cuda and k.is_cuda and v.is_cuda
+        softmax_scale = softmax_scale or 1.0 / math.sqrt(d)
+
+        has_bias = bias is not None
+        bias_type = "none"
+        if has_bias:
+            assert bias.dtype in [q.dtype, torch.float]
+            assert bias.is_cuda
+            assert bias.dim() == 4
+            if bias.stride(-1) != 1:
+                bias = bias.contiguous()
+            if bias.shape[2:] == (1, seqlen_k):
+                bias_type = "vector"
+            elif bias.shape[2:] == (seqlen_q, seqlen_k):
+                bias_type = "matrix"
+            else:
+                raise RuntimeError(
+                    "Last 2 dimensions of bias must be (1, seqlen_k)" " or (seqlen_q, seqlen_k)"
+                )
+            bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
+        bias_strides = (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
+
+        seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
+        lse = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
+        tmp = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
+        o = torch.empty_like(q)
+
+        BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
+        BLOCK = 128
+        num_warps = 4 if d <= 64 else 8
+        grid = lambda META: (triton.cdiv(seqlen_q, META["BLOCK_M"]), batch * nheads)
+
+        rng_seed, rng_offset = increment_philox_state(batch * nheads * seqlen_q * seqlen_k)
+
+        _fwd_kernel[grid](
+            q,
+            k,
+            v,
+            bias,
+            o,
+            lse,
+            tmp,
+            softmax_scale,
+            dropout_p,
+            rng_seed,
+            rng_offset,
+            q.stride(0),
+            q.stride(2),
+            q.stride(1),
+            k.stride(0),
+            k.stride(2),
+            k.stride(1),
+            v.stride(0),
+            v.stride(2),
+            v.stride(1),
+            *bias_strides,
+            o.stride(0),
+            o.stride(2),
+            o.stride(1),
+            nheads,
+            seqlen_q,
+            seqlen_k,
+            seqlen_q_rounded,
+            d,
+            seqlen_q // 32,
+            seqlen_k // 32,  # key for triton cache (limit number of compilations)
+            dropout_p > 0.0,  # USE_DROPOUT
+            bias_type,
+            causal,
+            BLOCK_HEADDIM,
+            BLOCK_M=BLOCK,
+            BLOCK_N=BLOCK,
+            num_warps=num_warps,
+            num_stages=2,
         )
+        ctx.softmax_scale = softmax_scale  # softmax scale could have been updated
+        ctx.dropout_seed = rng_seed
+        ctx.dropout_offset = rng_offset
         ctx.save_for_backward(q, k, v, o, lse, bias)
         ctx.causal = causal
         ctx.dropout_p = dropout_p
+
         return o
 
     @staticmethod
@@ -959,23 +829,117 @@ class FlashAttnTritonFunction(torch.autograd.Function):
             dq = torch.empty_like(q)
             dk = torch.empty_like(k)
             dv = torch.empty_like(v)
-            _flash_attn_backward(
+            # Make sure that the last dimension is contiguous
+            if do.stride(-1) != 1:
+                do = do.contiguous()
+            batch, seqlen_q, nheads, d = q.shape
+            _, seqlen_k, _, _ = k.shape
+            assert seqlen_q % 128 == 0
+            assert seqlen_k % 128 == 0
+            assert d == 128
+            seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
+            assert lse.shape == (batch, nheads, seqlen_q_rounded)
+            assert q.stride(-1) == k.stride(-1) == v.stride(-1) == o.stride(-1) == 1
+            assert dq.stride(-1) == dk.stride(-1) == dv.stride(-1) == 1
+            softmax_scale = ctx.softmax_scale or 1.0 / math.sqrt(d)
+            dq_accum = torch.empty_like(q, dtype=torch.float32)
+            delta = torch.empty_like(lse)
+
+            BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
+            grid = lambda META: (triton.cdiv(seqlen_q, META["BLOCK_M"]), batch * nheads)
+            _bwd_preprocess_do_o_dot[grid](
+                o,
                 do,
+                delta,
+                o.stride(0),
+                o.stride(2),
+                o.stride(1),
+                do.stride(0),
+                do.stride(2),
+                do.stride(1),
+                nheads,
+                seqlen_q,
+                seqlen_q_rounded,
+                d,
+                BLOCK_M=128,
+                BLOCK_HEADDIM=BLOCK_HEADDIM,
+            )
+
+            has_bias = bias is not None
+            bias_type = "none"
+            if has_bias:
+                assert bias.dtype in [q.dtype, torch.float]
+                assert bias.is_cuda
+                assert bias.dim() == 4
+                assert bias.stride(-1) == 1
+                if bias.shape[2:] == (1, seqlen_k):
+                    bias_type = "vector"
+                elif bias.shape[2:] == (seqlen_q, seqlen_k):
+                    bias_type = "matrix"
+                else:
+                    raise RuntimeError(
+                        "Last 2 dimensions of bias must be (1, seqlen_k)" " or (seqlen_q, seqlen_k)"
+                    )
+                bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
+            bias_strides = (
+                (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
+            )
+
+            grid = lambda META: (
+                triton.cdiv(seqlen_k, META["BLOCK_N"]),
+                batch * nheads,
+            )
+            _bwd_kernel[grid](
                 q,
                 k,
                 v,
-                o,
-                lse,
-                dq,
+                bias,
+                do,
+                dq_accum,
                 dk,
                 dv,
-                bias=bias,
-                causal=ctx.causal,
-                dropout_p=ctx.dropout_p,
-                rng_seed=ctx.dropout_seed,
-                rng_offset=ctx.dropout_offset,
-                softmax_scale=ctx.softmax_scale,
+                lse,
+                delta,
+                softmax_scale,
+                ctx.dropout_p,
+                ctx.dropout_seed,
+                ctx.dropout_offset,
+                q.stride(0),
+                q.stride(2),
+                q.stride(1),
+                k.stride(0),
+                k.stride(2),
+                k.stride(1),
+                v.stride(0),
+                v.stride(2),
+                v.stride(1),
+                *bias_strides,
+                do.stride(0),
+                do.stride(2),
+                do.stride(1),
+                dq_accum.stride(0),
+                dq_accum.stride(2),
+                dq_accum.stride(1),
+                dk.stride(0),
+                dk.stride(2),
+                dk.stride(1),
+                dv.stride(0),
+                dv.stride(2),
+                dv.stride(1),
+                nheads,
+                seqlen_q,
+                seqlen_k,
+                seqlen_q_rounded,
+                d,
+                seqlen_q // 32,
+                seqlen_k // 32,  # key for triton cache (limit number of compilations)
+                ctx.dropout_p > 0.0,  # USE_DROPOUT
+                bias_type,
+                ctx.causal,
+                BLOCK_HEADDIM,
             )
+            dq.copy_(dq_accum)
+
         return dq, dk, dv, None, None, None, None
 
 
