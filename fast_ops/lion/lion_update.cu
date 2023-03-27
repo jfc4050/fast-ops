@@ -88,9 +88,11 @@ __global__ void lion_update_kernel(
 
     // decay momentum
     // m = beta2 * m_prev + (1 - beta2) * g
+    PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       momentum_vector.val[ii] *= static_cast<scalar_t>(beta2);
     }
+    PRAGMA_UNROLL
     for (int ii = 0; ii < ACCESS_N; ++ii) {
       // TODO. make sure compiler uses FMA here
       momentum_vector.val[ii] =
