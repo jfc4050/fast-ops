@@ -855,20 +855,18 @@ def _flash_attn_backward(
         do = do.contiguous()
     batch, seqlen_q, nheads, d = q.shape
     _, seqlen_k, _, _ = k.shape
-    # assert d in {16, 32, 64, 128}
-    assert d <= 128
+    assert seqlen_q % 128 == 0
+    assert seqlen_k % 128 == 0
+    assert d == 128
     seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
     assert lse.shape == (batch, nheads, seqlen_q_rounded)
     assert q.stride(-1) == k.stride(-1) == v.stride(-1) == o.stride(-1) == 1
     assert dq.stride(-1) == dk.stride(-1) == dv.stride(-1) == 1
     softmax_scale = softmax_scale or 1.0 / math.sqrt(d)
-    # dq_accum = torch.zeros_like(q, dtype=torch.float32)
     dq_accum = torch.empty_like(q, dtype=torch.float32)
     delta = torch.empty_like(lse)
-    # delta = torch.zeros_like(lse)
 
     BLOCK_HEADDIM = max(triton.next_power_of_2(d), 16)
-    assert BLOCK_HEADDIM == 128
     grid = lambda META: (triton.cdiv(seqlen_q, META["BLOCK_M"]), batch * nheads)
     _bwd_preprocess_do_o_dot[grid](
         o,
@@ -906,9 +904,6 @@ def _flash_attn_backward(
         bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
     bias_strides = (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
 
-    # BLOCK_M = 128
-    # BLOCK_N = 64
-    # num_warps = 4
     grid = lambda META: (
         triton.cdiv(seqlen_k, META["BLOCK_N"]),
         batch * nheads,
