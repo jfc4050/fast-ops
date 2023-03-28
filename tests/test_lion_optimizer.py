@@ -12,9 +12,12 @@ torch.set_printoptions(sci_mode=False, linewidth=200)
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16], ids=str)
 def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
     def __print_tensor_diff(x: Tensor, x_ref: Tensor):
+        x = x.flatten()
+        x_ref = x_ref.flatten()
+        diff = (x - x_ref).abs()
+        argmax = int(diff.argmax())
+        print(f"diff({x[argmax]}, {x_ref[argmax]}) = {diff[argmax]}")
         print(x.view(-1, 8))
-        print(x_ref.view(-1, 8))
-        print((x - x_ref).abs().view(-1, 8))
 
     lr = 1e-3
     betas = (0.9, 0.99)
@@ -38,13 +41,13 @@ def test_lion(weight_decay: float, dtype: torch.dtype) -> None:
         lion_ref.step()
 
         for param_idx, (param, param_ref) in enumerate(zip(params, params_ref)):
-            passed = torch.allclose(param, param_ref, rtol=1e-4, atol=1e-2)
+            passed = torch.allclose(param, param_ref, rtol=1e-5, atol=1e-2)
             if not passed:
                 __print_tensor_diff(param, param_ref)
                 assert False, f"param mismatch on param {param_idx}, iter {iter}"
             exp_avg = lion.state[param]["exp_avg"]
             exp_avg_ref = lion_ref.state[param_ref]["exp_avg"]
-            passed = torch.allclose(exp_avg, exp_avg_ref, rtol=1e-4, atol=1e-2)
+            passed = torch.allclose(exp_avg, exp_avg_ref, rtol=1e-5, atol=1e-2)
             if not passed:
                 __print_tensor_diff(exp_avg, exp_avg_ref)
                 assert False, f"exp_avg mismatch on param {param_idx}, iter {iter}"
