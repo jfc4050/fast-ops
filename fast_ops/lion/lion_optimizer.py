@@ -27,8 +27,7 @@ lion_ext = torch.utils.cpp_extension.load(
 
 
 class Lion(Optimizer):
-    """
-    Lion Optimizer, as described in "Symbolic Discovery of Optimization Algorithms"
+    """Lion Optimizer, as described in "Symbolic Discovery of Optimization Algorithms"
     (https://arxiv.org/pdf/2302.06675.pdf)
     """
 
@@ -40,14 +39,13 @@ class Lion(Optimizer):
         weight_decay: float = 0.0,
     ) -> None:
         """
-        :param params: iterable of parameters to optimize or dicts defining
-          parameter groups
+        :param params: iterable of parameters to optimize or dicts defining parameter groups
         :param lr: learning rate
-        :param betas: coefficients used for computing
-          running averages of gradient and its square
+        :param betas: coefficients used for computing running averages of gradient and its square. Defaults
+          are same as used in the paper, except for language modeling tasks, where authors recommend
+          [0.95, 0.98].
         :param weight_decay: weight decay coefficient
         """
-
         if lr <= 0:
             raise RuntimeError(f"expected positive LR, got {lr}")
         if not all(0 <= beta <= 1 for beta in betas):
@@ -58,6 +56,7 @@ class Lion(Optimizer):
 
     @torch.no_grad()
     def step(self) -> None:
+        """Parameter and state (momentum) update."""
         for param_group in self.param_groups:
             lr = param_group["lr"]
             weight_decay = param_group["weight_decay"]
@@ -67,8 +66,10 @@ class Lion(Optimizer):
                 grad: Tensor = param.grad
 
                 state = self.state[param]
-                # init state: exponential moving average of gradient value
-                if len(state) == 0:
+                if "exp_avg" not in state:
+                    # init state: exponential moving average of gradient value
+                    # TODO. user may want to keep state in different dtype
+                    # (although in paper bfloat16 momentum is used).
                     state["exp_avg"] = torch.zeros_like(param)
                 exp_avg: Tensor = state["exp_avg"]
 
