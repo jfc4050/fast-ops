@@ -24,7 +24,9 @@ __global__ void lion_update_kernel(
     const float weight_decay) {
 
   // 128bit/16byte access per thread
-  static_assert(sizeof(scalar_t) == sizeof(exp_avg_t), "restriction for now");
+  static_assert(
+      sizeof(scalar_t) == sizeof(exp_avg_t),
+      "restriction for now to simplify vectorized loads");
   constexpr int ACCESS_N = 16 / sizeof(scalar_t);
   using VectorT = at::native::memory::aligned_vector<scalar_t, ACCESS_N>;
   using ExpAvgVectorT = at::native::memory::aligned_vector<exp_avg_t, ACCESS_N>;
@@ -127,15 +129,18 @@ void lion_update(
 
   const int param_numel = param.numel();
 
-  // TODO. assert dtypes
+  TORCH_CHECK_EQ(param.scalar_type(), grad.scalar_type());
+  TORCH_CHECK_EQ(
+      param.scalar_type(),
+      exp_avg.scalar_type()); // TODO. remove this restriction
 
   CHECK_CONTIGUOUS(param);
   CHECK_CONTIGUOUS(grad);
   CHECK_CONTIGUOUS(exp_avg);
 
   AT_DISPATCH_HALF_TYPES(param.scalar_type(), "lion_update", [&]() {
-    const int numel = param.numel();
     constexpr int BLOCK_DIM = 256;
+    const int numel = param.numel();
     const int N_BLOCKS = (numel + BLOCK_DIM - 1) / BLOCK_DIM;
     assert(numel % 8 == 0);
 
