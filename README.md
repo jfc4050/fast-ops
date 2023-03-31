@@ -9,6 +9,8 @@ Some other places you can go "shopping" for operators are:
 * [ByteDance LightSeq](https://github.com/bytedance/lightseq/tree/master)
 * [FlashAttention](https://github.com/HazyResearch/flash-attention) - There's lots of other
 optimized operators in there other than FlashAttention.
+* [bitsandbytes](https://github.com/TimDettmers/bitsandbytes) - Various operations related to low precision (8-bit)
+training and inference.
 
 # Operators
 * **[(Flash) Multi-Head Attention](fast_ops/flash_attention/):**
