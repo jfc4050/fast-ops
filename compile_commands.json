@@ -8,7 +8,7 @@
             "-DPYBIND11_COMPILER_TYPE=\"_gcc\"",
             "-DPYBIND11_STDLIB=\"_libstdcpp\"",
             "-DPYBIND11_BUILD_ABI=\"_cxxabi1013\"",
-            "-I/workspace/fast-ops/third-party/cutlass/include",
+            "-Ithird-party/cutlass/include",
             "-isystem",
             "/usr/local/lib/python3.8/dist-packages/torch/include",
             "-isystem",
