@@ -30,7 +30,12 @@ This project's Python dependencies are managed with [Poetry](https://python-poet
 
 You can install dependencies (or subsets for development and testing) using:
 ```bash
-> poetry install
+> poetry install --no-root
+```
+this will create a new virtual environment all dependencies installed, which can
+be activated using
+```bash
+> source $(poetry env info --path)/bin/activate
 ```
 
 ## Testing
