@@ -24,9 +24,12 @@ TODOs:
 """
 
 import math
+from typing import Tuple
 
 import numpy as np
 import torch
+from torch import Tensor
+from torch.autograd import Function
 
 import triton
 import triton.language as tl
@@ -720,9 +723,18 @@ def triton_dropout_mask(
     return tensor.to(torch.bool)
 
 
-class FlashAttnTritonFunction(torch.autograd.Function):
+class FlashAttnTritonFunction(Function):
     @staticmethod
-    def forward(ctx, q, k, v, bias=None, causal=False, dropout_p: float = 0.0, softmax_scale=None):
+    def forward(
+        ctx,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        bias: Tensor = None,
+        causal: bool = False,
+        dropout_p: float = 0.0,
+        softmax_scale: float = None,
+    ) -> Tensor:
         """
         q: (batch_size, seqlen_q, nheads, headdim)
         k, v: (batch_size, seqlen_k, nheads, headdim)
@@ -730,15 +742,14 @@ class FlashAttnTritonFunction(torch.autograd.Function):
             For example, ALiBi mask for causal would have shape (1, nheads, 1, seqlen_k).
             ALiBi mask for non-causal would have shape (1, nheads, seqlen_q, seqlen_k)
         """
-        # Make sure that the last dimension is contiguous
-        q, k, v = [x if x.stride(-1) == 1 else x.contiguous() for x in [q, k, v]]
-        # shape constraints
-
         batch, seqlen_q, nheads, d = q.shape
         _, seqlen_k, _, _ = k.shape
+        seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
+
         assert k.shape == (batch, seqlen_k, nheads, d)
         assert v.shape == (batch, seqlen_k, nheads, d)
         assert d <= 128, "FlashAttention only support head dimensions up to 128"
+        assert q.stride(-1) == k.stride(-1) == v.stride(-1) == 1
         assert q.dtype == k.dtype == v.dtype, "All tensors must have the same type"
         assert q.dtype in [torch.float16, torch.bfloat16], "Only support fp16 and bf16"
         assert q.is_cuda and k.is_cuda and v.is_cuda
@@ -763,7 +774,6 @@ class FlashAttnTritonFunction(torch.autograd.Function):
             bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
         bias_strides = (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
 
-        seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
         lse = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
         tmp = torch.empty((batch, nheads, seqlen_q_rounded), device=q.device, dtype=torch.float32)
         o = torch.empty_like(q)
@@ -826,28 +836,50 @@ class FlashAttnTritonFunction(torch.autograd.Function):
         return o
 
     @staticmethod
-    def backward(ctx, do):
+    def backward(ctx, do: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         q, k, v, o, lse, bias = ctx.saved_tensors
-        assert not ctx.needs_input_grad[3], "FlashAttention does not support bias gradient yet"
+        batch, seqlen_q, nheads, d = q.shape
+        _, seqlen_k, _, _ = k.shape
+        seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
+
+        assert k.shape == (batch, seqlen_k, nheads, d)
+        assert v.shape == (batch, seqlen_k, nheads, d)
+        assert seqlen_q % 128 == 0
+        assert seqlen_k % 128 == 0
+        assert d == 128
+        assert do.shape == q.shape
+        assert q.stride(-1) == k.stride(-1) == v.stride(-1) == o.stride(-1) == do.stride(-1) == 1
+        assert lse.shape == (batch, nheads, seqlen_q_rounded)
+        assert q.dtype in {torch.float16, torch.bfloat16}
+        assert q.dtype == k.dtype == v.dtype == do.dtype
+
+        bias: Tensor
+        has_bias = bias is not None
+        bias_type = "none"
+        if has_bias:
+            assert not ctx.needs_input_grad[3], "FlashAttention does not support bias gradient yet"
+            assert bias.dtype in [q.dtype, torch.float]
+            assert bias.is_cuda
+            assert bias.dim() == 4
+            assert bias.stride(-1) == 1
+            if bias.shape[2:] == (1, seqlen_k):
+                bias_type = "vector"
+            elif bias.shape[2:] == (seqlen_q, seqlen_k):
+                bias_type = "matrix"
+            else:
+                raise ValueError(
+                    "Last 2 dimensions of bias must be (1, seqlen_k) or (seqlen_q, seqlen_k)"
+                )
+            bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
+
+        softmax_scale = ctx.softmax_scale or 1.0 / math.sqrt(d)
+
         # Triton's autotune causes the Tensor._version to change, and so Pytorch autograd
         # does a memcpy. To avoid this we run in inference_mode, which doesn't track the version.
         with torch.inference_mode():
             dq = torch.empty_like(q)
             dk = torch.empty_like(k)
             dv = torch.empty_like(v)
-            # Make sure that the last dimension is contiguous
-            if do.stride(-1) != 1:
-                do = do.contiguous()
-            batch, seqlen_q, nheads, d = q.shape
-            _, seqlen_k, _, _ = k.shape
-            assert seqlen_q % 128 == 0
-            assert seqlen_k % 128 == 0
-            assert d == 128
-            seqlen_q_rounded = math.ceil(seqlen_q / 128) * 128
-            assert lse.shape == (batch, nheads, seqlen_q_rounded)
-            assert q.stride(-1) == k.stride(-1) == v.stride(-1) == o.stride(-1) == 1
-            assert dq.stride(-1) == dk.stride(-1) == dv.stride(-1) == 1
-            softmax_scale = ctx.softmax_scale or 1.0 / math.sqrt(d)
             dq_accum = torch.empty_like(q, dtype=torch.float32)
             delta = torch.empty_like(lse)
 
@@ -871,26 +903,9 @@ class FlashAttnTritonFunction(torch.autograd.Function):
                 BLOCK_HEADDIM=BLOCK_HEADDIM,
             )
 
-            has_bias = bias is not None
-            bias_type = "none"
-            if has_bias:
-                assert bias.dtype in [q.dtype, torch.float]
-                assert bias.is_cuda
-                assert bias.dim() == 4
-                assert bias.stride(-1) == 1
-                if bias.shape[2:] == (1, seqlen_k):
-                    bias_type = "vector"
-                elif bias.shape[2:] == (seqlen_q, seqlen_k):
-                    bias_type = "matrix"
-                else:
-                    raise RuntimeError(
-                        "Last 2 dimensions of bias must be (1, seqlen_k)" " or (seqlen_q, seqlen_k)"
-                    )
-                bias = bias.expand(batch, nheads, seqlen_q, seqlen_k)
             bias_strides = (
                 (bias.stride(0), bias.stride(1), bias.stride(2)) if has_bias else (0, 0, 0)
             )
-
             grid = lambda META: (
                 triton.cdiv(seqlen_k, META["BLOCK_N"]),
                 batch * nheads,
