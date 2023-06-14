@@ -9,6 +9,9 @@ packages = [{include = "fast_ops"}]
 [tool.poetry.dependencies]
 python = "^3.8"
 triton = "2.0.0.dev20221202"
+numpy = "^1.24.3"
+einops = "^0.6.1"
+setuptools = "^67.8.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.1.0"
@@ -17,6 +20,7 @@ black = "^23.1.0"
 pytest = "^7.2.2"
 pytest-sugar = "^0.9.6"
 pytest-xdist = "^3.2.1"
+scipy = { version = "1.10.1", python = ">=3.8,<3.12" }
 
 [build-system]
 requires = ["poetry-core"]
