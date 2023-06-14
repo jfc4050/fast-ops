@@ -107,6 +107,7 @@ def attention_ref(
     ],
 )
 @pytest.mark.parametrize("bias_shape", ([None, "1h1k", "1hqk", "b11k", "b1qk"]))
+@pytest.mark.parametrize("mask_all", [False, True])
 @pytest.mark.parametrize("dropout_p", [0.0, 0.17])
 @pytest.mark.parametrize("multi_query", ([False, True]))
 def test_flash_attn_triton_output(
@@ -119,6 +120,7 @@ def test_flash_attn_triton_output(
     causal,
     dtype,
     bias_shape,
+    mask_all,
     dropout_p,
     multi_query,
 ):
@@ -142,14 +144,20 @@ def test_flash_attn_triton_output(
     if multi_query:
         k = k.expand(batch_size, seqlen_k, nheads, d)
         v = v.expand(batch_size, seqlen_k, nheads, d)
-    if bias_shape == "1h1k":
-        bias = torch.randn(1, nheads, 1, seqlen_k, dtype=torch.float, device=device)
-    elif bias_shape == "1hqk":
-        bias = torch.randn(1, nheads, seqlen_q, seqlen_k, dtype=torch.float, device=device)
-    elif bias_shape == "b11k":
-        bias = torch.randn(batch_size, 1, 1, seqlen_k, dtype=torch.float, device=device)
-    elif bias_shape == "b1qk":
-        bias = torch.randn(batch_size, 1, seqlen_q, seqlen_k, dtype=torch.float, device=device)
+    if bias_shape is not None:
+        if bias_shape == "1h1k":
+            bias = torch.randn(1, nheads, 1, seqlen_k, dtype=torch.float, device=device)
+        elif bias_shape == "1hqk":
+            bias = torch.randn(1, nheads, seqlen_q, seqlen_k, dtype=torch.float, device=device)
+        elif bias_shape == "b11k":
+            bias = torch.randn(batch_size, 1, 1, seqlen_k, dtype=torch.float, device=device)
+        elif bias_shape == "b1qk":
+            bias = torch.randn(batch_size, 1, seqlen_q, seqlen_k, dtype=torch.float, device=device)
+        else:
+            assert False, f"unexpected bias_shape {bias}"
+
+        if mask_all:
+            bias.fill_(-torch.inf)
     else:
         bias = None
 
