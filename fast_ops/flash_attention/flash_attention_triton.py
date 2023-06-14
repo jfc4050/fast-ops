@@ -460,14 +460,8 @@ def _bwd_kernel(
             )
 
     # initialize dv and dk
-    if USE_DROPOUT:
-        # accumulate dKj and dVj in half precision to save SRAM/registers.
-        # will result in slightly increased numerical error.
-        dv = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=DV.dtype.element_ty)
-        dk = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=DK.dtype.element_ty)
-    else:
-        dv = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=tl.float32)
-        dk = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=tl.float32)
+    dv = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=tl.float32)
+    dk = tl.zeros([BLOCK_N, BLOCK_HEADDIM], dtype=tl.float32)
 
     # loop over rows
     # We need to make sure begin_m is a multiple of BLOCK_M (not BLOCK_N)

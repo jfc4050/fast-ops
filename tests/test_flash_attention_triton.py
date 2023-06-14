@@ -207,13 +207,11 @@ def test_flash_attn_triton_output(
     mismatched_outputs = []
     if (output - output_ref).abs().max().item() > 2 * (output_pt - output_ref).abs().max().item():
         mismatched_outputs.append("out")
-    # TODO. dropout increases numerical error and dQ fails sometimes.
-    err_factor = 3 if testing_dropout else 2
-    if (dq - dq_ref).abs().max().item() > err_factor * (dq_pt - dq_ref).abs().max().item():
+    if (dq - dq_ref).abs().max().item() > 2 * (dq_pt - dq_ref).abs().max().item():
         mismatched_outputs.append("dQ")
-    if (dk - dk_ref).abs().max().item() > err_factor * (dk_pt - dk_ref).abs().max().item():
+    if (dk - dk_ref).abs().max().item() > 2 * (dk_pt - dk_ref).abs().max().item():
         mismatched_outputs.append("dK")
-    if (dv - dv_ref).abs().max().item() > err_factor * (dv_pt - dv_ref).abs().max().item():
+    if (dv - dv_ref).abs().max().item() > 2 * (dv_pt - dv_ref).abs().max().item():
         mismatched_outputs.append("dV")
 
     failed = len(mismatched_outputs) > 0
